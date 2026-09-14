@@ -18,7 +18,6 @@ Any static file server from the project root works:
 
 On windows click on start.bat 
 
-During development
 ```bash
 npm run serve          # python3 -m http.server 5173
 # then open http://127.0.0.1:5173/
