@@ -112,6 +112,7 @@ export function parseWorkbook(wb) {
     shifts: [],       // {name, start, end} as minutes since midnight
     breaks: [],
     order: [],        // optional [{code, qty}] from an "Order" sheet
+    failures: [],     // optional one-off [{date, start, end}] from a "Failures" sheet
     warnings,
     sheetNames: wb.SheetNames.slice(),
   };
@@ -270,6 +271,41 @@ function parseTimesSheets(wb, result, warnings) {
     warnings.push('No "Shifts" sheet found — assuming one shift, 06:00–14:00.');
     result.shifts = [{ name: "Shift 1", start: 360, end: 840 }];
   }
+
+  parseFailuresSheet(wb, result, warnings);
+}
+
+/**
+ * Optional "Failures" sheet (Date, Start, End) — one-off unplanned downtime.
+ * Dates accept "YYYY-MM-DD" or Excel date values; times as usual.
+ */
+function parseFailuresSheet(wb, result, warnings) {
+  const headerTest = (r) =>
+    (r || []).some((c) => /date|day/i.test(norm(c))) &&
+    (r || []).some((c) => /start|from|begin/i.test(norm(c))) &&
+    (r || []).some((c) => /end|to\b|bis|finish/i.test(norm(c)));
+  const sheet = findSheet(wb, /failure|fail|down|unplanned/i, headerTest);
+  if (!sheet) return;
+
+  const rows = sheetRows(wb, sheet);
+  const headerIdx = findHeaderRow(rows, [/date|day/i, /start|from|begin/i, /end|to\b|finish/i]);
+  if (headerIdx < 0) return;
+
+  const head = rows[headerIdx];
+  const dateCol = head.findIndex((c) => /date|day/i.test(norm(c)));
+  const sCol = head.findIndex((c) => /start|from|begin/i.test(norm(c)));
+  const eCol = head.findIndex((c) => /end|to\b|bis|finish/i.test(norm(c)));
+
+  const failures = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i] || [];
+    const date = parseDateValue(row[dateCol]);
+    const s = parseTimeToMinutes(row[sCol]);
+    const e = parseTimeToMinutes(row[eCol]);
+    if (!date || s == null || e == null) continue;
+    failures.push({ date, start: s, end: e });
+  }
+  result.failures = failures;
 }
 
 function readTimesSheet(wb, nameRe, fallbackName) {

@@ -17,6 +17,7 @@
       <button id="btn-file" class="btn primary" type="button">Open workbook…</button>
       <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm" hidden />
       <button id="btn-demo" class="btn" type="button">Load demo data</button>
+      <button id="btn-reload" class="btn" type="button" title="Re-read the workbook from disk — keeps your queue, quantities and OEE" disabled>Reload</button>
       <span class="divider" aria-hidden="true"></span>
       <button id="btn-export-book" class="btn" type="button" title="Download this plan as a workbook (setup matrix, codes, order, settings)">Download workbook</button>
       <button id="btn-svg" class="btn" type="button" title="Download the chart as SVG">SVG</button>
@@ -60,9 +61,19 @@
 
       <section class="panel">
         <h2>Shift calendar</h2>
-        <div class="field-row">
+        <label class="field">Planning direction
+          <select id="direction">
+            <option value="forward">Forward — start as soon as possible</option>
+            <option value="backward">Backward — finish by the due date</option>
+          </select>
+        </label>
+        <div class="field-row field-anchor-start">
           <label>Start date <input id="start-date" type="date" /></label>
           <label>Not before <input id="start-time" type="time" /></label>
+        </div>
+        <div class="field-row field-anchor-due" hidden>
+          <label>Due date <input id="due-date" type="date" /></label>
+          <label>Finish by <input id="due-time" type="time" /></label>
         </div>
 
         <div class="cal-block">
@@ -74,6 +85,13 @@
         <div class="cal-block">
           <div class="cal-head"><span>Breaks</span><button id="btn-add-break" class="btn tiny" type="button">Add</button></div>
           <div id="breaks-list"></div>
+        </div>
+
+        <div class="cal-block">
+          <div class="cal-head"><span>Production failures</span><button id="btn-add-failure" class="btn tiny" type="button">Add</button></div>
+          <div class="cal-cols cal-cols-failure"><span>Date</span><span>Start</span><span>End</span></div>
+          <div id="failures-list"></div>
+          <p class="hint">One-off unplanned downtime — pauses production and shows red on the chart.</p>
         </div>
       </section>
 

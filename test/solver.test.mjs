@@ -445,3 +445,114 @@ test("OEE loss is measurable: same plan, slower calendar footprint", () => {
   // exactly 150 min lost to poor performance on this plan
   assert.equal(lossy.runMinutes - perfect.runMinutes, 150);
 });
+
+/* ------------------------------------------------- backwards + failures -- */
+
+const twoShiftCtx = () => ({
+  setup: { "Start>A": 60, "A>B": 30 },
+  initialFamily: "Start",
+  calendar: {
+    startDate: "2025-01-06",
+    startAt: null,
+    shifts: [
+      { name: "1", start: "06:00", end: "14:00" },
+      { name: "2", start: "14:00", end: "22:00" },
+    ],
+    breaks: [{ name: "Lunch", start: "12:00", end: "12:30" }],
+  },
+  codes: [
+    { id: "1", code: "A1", family: "A", qty: 4, unitMinutes: 10 },
+    { id: "2", code: "B1", family: "B", qty: 4, unitMinutes: 10 },
+  ],
+  oee: 0.8,
+});
+
+test("backward planning anchors the finish at the due date", () => {
+  const ctx = twoShiftCtx();
+  ctx.calendar.direction = "backward";
+  ctx.calendar.dueDate = "2025-01-07";
+  ctx.calendar.dueAt = "17:00";
+
+  const sched = buildSchedule(ctx, ["A", "B"]);
+  assert.equal(sched.end.getHours(), 17);          // finishes exactly at due
+  assert.equal(sched.end.getDate(), 7);
+
+  // forward plan of the same sequence has identical working-time blocks,
+  // just shifted: same setup + run totals
+  const fwd = buildSchedule({ ...ctx, calendar: { ...ctx.calendar, direction: "forward" } }, ["A", "B"]);
+  assert.ok(Math.abs(sched.setupMinutes - fwd.setupMinutes) < 1e-6);
+  assert.ok(Math.abs(sched.runMinutes - fwd.runMinutes) < 1e-6);
+});
+
+test("backward planning keeps the run order and setup placement", () => {
+  const ctx = twoShiftCtx();
+  ctx.calendar.direction = "backward";
+  ctx.calendar.dueDate = "2025-01-07";
+  ctx.calendar.dueAt = "17:00";
+
+  const sched = buildSchedule(ctx, ["A", "B"]);
+  const rowA = sched.rows[0], rowB = sched.rows[1];
+  // A still runs before B, B finishes last (just before due)
+  assert.ok(rowA.runSegments[0].start < rowB.runSegments[0].start);
+  // B's last segment ends at the anchor
+  assert.equal(rowB.runSegments[rowB.runSegments.length - 1].end.getTime(),
+    new Date("2025-01-07T17:00:00").getTime());
+  // setup bars exist exactly once per visit, on the first row
+  assert.deepEqual(
+    sched.rows.map((r) => r.setupSegments.length > 0),
+    [true, true]
+  );
+  // every segment sits inside working time (no overlap with the 12:00 lunch)
+  for (const row of sched.rows) {
+    for (const s of [...row.setupSegments, ...row.runSegments]) {
+      const t0 = s.start.getHours() * 60 + s.start.getMinutes();
+      const t1 = s.end.getHours() * 60 + s.end.getMinutes();
+      const crossesLunch = t0 < 720 && t1 > 720 && s.start.getDate() === s.end.getDate();
+      assert.ok(!crossesLunch, "segment crosses lunch break");
+    }
+  }
+});
+
+test("backward planning without dueAt finishes at the shift end", () => {
+  const ctx = twoShiftCtx();
+  ctx.calendar.direction = "backward";
+  ctx.calendar.dueDate = "2025-01-07"; // no dueAt
+
+  const sched = buildSchedule(ctx, ["A", "B"]);
+  // due day's last shift ends 22:00 — the plan finishes exactly there
+  assert.equal(sched.end.getHours(), 22);
+  assert.equal(sched.end.getDate(), 7);
+});
+
+test("failure windows pause work like breaks but are one-off", () => {
+  const ctx = twoShiftCtx();
+  ctx.calendar.failures = [
+    { date: "2025-01-06", start: "09:00", end: "11:00" }, // 2h breakdown on Monday
+  ];
+
+  const sched = buildSchedule(ctx, ["A", "B"]);
+  // nothing may run inside the failure window
+  for (const row of sched.rows) {
+    for (const s of [...row.setupSegments, ...row.runSegments]) {
+      const f0 = new Date("2025-01-06T09:00:00");
+      const f1 = new Date("2025-01-06T11:00:00");
+      const overlaps = s.start < f1 && s.end > f0;
+      assert.ok(!overlaps, `segment overlaps failure window: ${s.start}..${s.end}`);
+    }
+  }
+  // the failure pushes the plan later than without it
+  const clean = buildSchedule({ ...ctx, calendar: { ...ctx.calendar, failures: [] } }, ["A", "B"]);
+  assert.ok(sched.end > clean.end);
+  // the failure window itself is a hole, not work: identical working minutes
+  assert.ok(Math.abs(sched.runMinutes - clean.runMinutes) < 1e-6);
+});
+
+test("expandWorkIntervals cuts one-off failures from the shift grid", () => {
+  const ivs = expandWorkIntervals({
+    startDate: "2025-01-06",
+    shifts: [{ name: "1", start: "06:00", end: "14:00" }],
+    breaks: [],
+    failures: [{ date: "2025-01-06", start: "08:00", end: "10:00" }],
+  }, 1);
+  assert.deepEqual(ivs.map((iv) => [iv.start.getHours(), iv.end.getHours()]), [[6, 8], [10, 14]]);
+});

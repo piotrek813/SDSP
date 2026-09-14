@@ -41,16 +41,32 @@ serves `index.html` with its relative paths intact. No build step.
    like, mixing families freely. Each family change gets an amber edge in the
    queue and its changeover cost in the chips; the plan re-schedules live and
    the header reports the price, e.g. *“Manual sequence · 2 h 52 min
-   changeover — +44 min more than the best of 5,040 sequences.”* An
+   changeover — +44 min more than the Held–Karp optimum.”* An
    **edited · +44 min** pill tracks the gap; **Re-optimise** hands control
    back to the solver and restores the best sequence.
 5. Play with the session controls — nothing is ever written back to the file:
+   - **Planning direction** — *forward* starts as soon as the calendar
+     allows; *backward* anchors the plan's finish at a due date and fills
+     work backwards from there (jobs finish as late as possible, slack
+     appears at the start).
    - **OEE slider** dilutes production time live (10 min at 80 % → 12.5 min);
      the red card quantifies what poor performance costs on this plan.
    - **Shift calendar** (start date, shifts, breaks) reshapes the plan and
      shows how changeovers eat production capacity.
+   - **Production failures** — one-off unplanned-downtime windows (date,
+     start, end). They pause production like breaks, are drawn in red on the
+     chart, and the chart widens so they stay visible even outside the plan.
    - **Priority** pins a family to position 1 and reports the price of that
      constraint versus the free optimum.
+   - **Reload** re-reads the workbook from disk so external edits flow in —
+     the queue (order + quantities), OEE and failure windows survive; a
+     banner reports what was added or removed.
+6. **Download workbook** saves the whole session as an `.xlsx` — the original
+   setup matrix and catalogue, the current calendar, failure windows, an
+   **Order** sheet with the queue exactly as it runs (order + quantities),
+   and the session settings. Reloading that file restores the plan, including
+   a hand-made sub-optimal order (it opens in manual mode). **SVG** and
+   **PNG** export the chart itself.
 6. **Download workbook** saves the whole session as an `.xlsx` — the original
    setup matrix and catalogue, the current calendar, an **Order** sheet with
    the queue exactly as it runs (order + quantities), and the session
@@ -59,7 +75,7 @@ serves `index.html` with its relative paths intact. No build step.
    the chart itself.
 
 The chart itself: one row per code, family-colored bars, changeovers in
-standout amber with minute labels, and each row's **start time printed in the
+standout red with minute labels, and each row's **start time printed in the
 empty space before its first bar** — with the weekday when a row begins on a
 later day — so the plan reads without hovering. Breaks are hatched, off-shift
 time shaded, and a dashed ghost shows the 100 %-OEE plan when enabled.
@@ -76,6 +92,7 @@ ignored. See `sample-data/demo-input.xlsx`, regenerate it with `npm run sample`.
 | `Shifts`       | `Start`, `End`                           | `HH:MM` text, Excel time, or plain hours; may wrap midnight |
 | `Breaks`       | `Start`, `End`                           | subtracted from shifts                             |
 | `Order`        | `Code`, `Qty`                            | optional — restores a saved queue (written by "Download workbook") |
+| `Failures`     | `Date`, `Start`, `End`                   | optional — one-off unplanned-downtime windows                      |
 | `Settings`     | `Setting`, `Value`                       | `OEE` (0.8, 80 or “80 %”), `Start date`, `Initial family` (`None` = running) |
 
 ## The solver contract (for comparing implementations)

@@ -212,6 +212,10 @@ function dateAtTime(baseDate, dayOffset, minutes) {
  * Expand the recurring shift/break calendar into concrete, merged working
  * intervals (Date pairs) starting from `calendar.startDate`. Shifts may wrap
  * midnight (end <= start). Breaks outside any shift are ignored.
+ *
+ * `calendar.failures` are one-off production-failure windows — concrete
+ * datetimes ({date: "YYYY-MM-DD", start, end}), not recurring — and are cut
+ * out of the working time just like breaks.
  */
 export function expandWorkIntervals(calendar, days) {
   const shifts = (calendar.shifts || [])
@@ -220,28 +224,48 @@ export function expandWorkIntervals(calendar, days) {
   const breaks = (calendar.breaks || [])
     .map((b) => ({ ...b, a: parseTimeToMinutes(b.start), b: parseTimeToMinutes(b.end) }))
     .filter((b) => b.a != null && b.b != null && b.a !== b.b);
+  // one-off failure windows: concrete Date pairs
+  const failures = (calendar.failures || [])
+    .map((f) => {
+      if (!f || !f.date) return null;
+      const a = parseTimeToMinutes(f.start);
+      const b = parseTimeToMinutes(f.end);
+      if (a == null || b == null || a === b) return null;
+      const day = new Date(f.date + "T00:00:00");
+      return [dateAtTime(day, 0, a), dateAtTime(day, b <= a ? 1 : 0, b)];
+    })
+    .filter(Boolean);
 
   const base = new Date(calendar.startDate + "T00:00:00");
   const raw = [];
+
+  const subtractWindow = (segs, ws, we) => {
+    const next = [];
+    for (const [s0, s1] of segs) {
+      if (we <= s0 || ws >= s1) { next.push([s0, s1]); continue; }
+      if (ws > s0) next.push([s0, new Date(Math.min(s1.getTime(), ws.getTime()))]);
+      if (we < s1) next.push([new Date(Math.max(s0.getTime(), we.getTime())), s1]);
+    }
+    return next;
+  };
 
   for (let d = 0; d < days; d++) {
     for (const s of shifts) {
       const start = dateAtTime(base, d, s.a);
       const end = dateAtTime(base, s.b <= s.a ? d + 1 : d, s.b);
 
-      // subtract overlapping breaks
+      // subtract recurring breaks …
       let segs = [[start, end]];
       for (const b of breaks) {
         const bs = dateAtTime(base, d, b.a);
         const be = dateAtTime(base, b.b <= b.a ? d + 1 : d, b.b);
         if (be <= bs) continue;
-        const next = [];
-        for (const [s0, s1] of segs) {
-          if (be <= s0 || bs >= s1) { next.push([s0, s1]); continue; }
-          if (bs > s0) next.push([s0, new Date(Math.min(s1.getTime(), bs.getTime()))]);
-          if (be < s1) next.push([new Date(Math.max(s0.getTime(), be.getTime())), s1]);
-        }
-        segs = next;
+        segs = subtractWindow(segs, bs, be);
+      }
+      // … and any one-off failure windows overlapping this shift
+      for (const [fs, fe] of failures) {
+        if (fe <= start || fs >= end) continue;
+        segs = subtractWindow(segs, fs, fe);
       }
       for (const seg of segs) if (seg[1] > seg[0]) raw.push(seg);
     }
@@ -293,15 +317,47 @@ export function visitsFromCodeOrder(ctx, orderedCodes) {
 }
 
 /**
- * Place visits on the real calendar. Work pauses during breaks and between
- * shifts, then resumes in the next working interval. Setup is charged once per
- * visit and attached to the visit's first row.
+ * Place visits on the real calendar. Work pauses during breaks, failure
+ * windows and between shifts, then resumes in the next working interval.
+ * Setup is charged once per visit and attached to the visit's first row.
+ *
+ * Forward direction (default): work starts as early as the calendar allows,
+ * anchored at calendar.startDate (+ optional startAt).
+ *
+ * Backward direction (calendar.direction === "backward"): the plan's finish is
+ * anchored at calendar.dueDate (+ optional dueAt) and work is placed backwards
+ * from there — jobs finish as late as possible before the due date, slack
+ * appears at the beginning.
  *
  * Returns per-row segment data ready for a Gantt chart:
  *   rows[i] = { code, family, qty, unitIdeal, unitEffective, setupFrom,
  *               setupSegments: [{start,end}], runSegments: [{start,end}] }
  */
 function scheduleFromVisits(ctx, visits) {
+  const calendar = ctx.calendar || {};
+  const engine = calendar.direction === "backward" ? backwardScheduleFromVisits : forwardScheduleFromVisits;
+  return engine(ctx, visits);
+}
+
+function scheduleMetrics(rows) {
+  const segMinutes = (segments) =>
+    segments.reduce((a, x) => a + (x.end.getTime() - x.start.getTime()) / 60000, 0);
+  const started = rows
+    .flatMap((r) => [...r.setupSegments, ...r.runSegments])
+    .reduce((min, s) => (s.start < min ? s.start : min), new Date(8640000000000000));
+  const ended = rows
+    .flatMap((r) => [...r.setupSegments, ...r.runSegments])
+    .reduce((max, s) => (s.end > max ? s.end : max), new Date(-8640000000000000));
+  return {
+    rows,
+    start: rows.length ? started : null,
+    end: rows.length ? ended : null,
+    setupMinutes: rows.reduce((s, r) => s + segMinutes(r.setupSegments), 0),
+    runMinutes: rows.reduce((s, r) => s + segMinutes(r.runSegments), 0),
+  };
+}
+
+function forwardScheduleFromVisits(ctx, visits) {
   const calendar = ctx.calendar || {};
   const oee = normalizeOee(ctx.oee);
   const maxDays = calendar.maxDays || 400;
@@ -372,23 +428,106 @@ function scheduleFromVisits(ctx, visits) {
     prevFamily = fam;
   }
 
-  const started = rows
-    .flatMap((r) => [...r.setupSegments, ...r.runSegments])
-    .reduce((min, s) => (s.start < min ? s.start : min), new Date(8640000000000000));
-  const ended = rows
-    .flatMap((r) => [...r.setupSegments, ...r.runSegments])
-    .reduce((max, s) => (s.end > max ? s.end : max), new Date(-8640000000000000));
+  return scheduleMetrics(rows);
+}
 
-  const segMinutes = (segments) =>
-    segments.reduce((a, x) => a + (x.end.getTime() - x.start.getTime()) / 60000, 0);
+function backwardScheduleFromVisits(ctx, visits) {
+  const calendar = ctx.calendar || {};
+  const oee = normalizeOee(ctx.oee);
+  if (!calendar.dueDate) throw new Error("Backward planning needs a due date.");
 
-  return {
-    rows,
-    start: rows.length ? started : null,
-    end: rows.length ? ended : null,
-    setupMinutes: rows.reduce((s, r) => s + segMinutes(r.setupSegments), 0),
-    runMinutes: rows.reduce((s, r) => s + segMinutes(r.runSegments), 0),
+  const dueBase = new Date(calendar.dueDate + "T00:00:00");
+  const backDays = Math.min(calendar.maxDays || 400, 360);
+
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const origin = new Date(dueBase.getTime() - backDays * DAY_MS);
+  const originStr = `${origin.getFullYear()}-${pad2(origin.getMonth() + 1)}-${pad2(origin.getDate())}`;
+
+  let intervals = expandWorkIntervals({ ...calendar, startDate: originStr }, backDays + 1);
+
+  // Anchor: the given due time, or — when absent — the end of the last
+  // working interval on the due day.
+  const dueAt = calendar.dueAt ? parseTimeToMinutes(calendar.dueAt) : null;
+  if (dueAt != null) {
+    const anchor = dateAtTime(dueBase, 0, dueAt);
+    intervals = intervals
+      .map((iv) => ({ start: iv.start, end: iv.end > anchor ? anchor : iv.end }))
+      .filter((iv) => iv.end > iv.start);
+  } else {
+    intervals = intervals.filter((iv) => iv.end <= new Date(dueBase.getTime() + DAY_MS));
+    if (!intervals.length) throw new Error("No working time on or before the due date — check the shifts.");
+  }
+  if (!intervals.length) throw new Error("No working time before the due date — check the shift definition.");
+
+  // walk the working time backwards: last interval first, consuming from ends
+  const reversed = intervals.slice().reverse();
+  let idx = 0;
+
+  const takeBack = (minutesNeeded, sink) => {
+    let remaining = minutesNeeded;
+    let guard = 0;
+    while (remaining > 1e-9) {
+      if (++guard > 20000) throw new Error("Could not fit the plan before the due date — check shifts.");
+      if (idx >= reversed.length) {
+        throw new Error("Not enough working time before the due date — the plan does not fit.");
+      }
+      const iv = reversed[idx];
+      if (iv.end <= iv.start) { idx++; continue; }
+      const avail = (iv.end.getTime() - iv.start.getTime()) / 60000;
+      const slice = Math.min(avail, remaining);
+      const segStart = new Date(iv.end.getTime() - slice * 60000);
+      sink.push({ start: segStart, end: new Date(iv.end) });
+      remaining -= slice;
+      iv.end = segStart;
+      if (iv.end <= iv.start) idx++;
+    }
   };
+
+  // Place from the end of the plan backwards: last visit consumes time first,
+  // then its setup, then the previous visit, and so on. The first visit in
+  // the sequence therefore runs first chronologically — same run order, just
+  // anchored at the due date.
+  const placements = new Map(); // code object -> run segments (reverse order)
+  const setupByVisit = new Map();
+  for (let i = visits.length - 1; i >= 0; i--) {
+    const visit = visits[i];
+    for (const c of visit.codes.slice().reverse()) {
+      const runSegments = [];
+      const minutes = (c.qty || 0) * effectiveUnitMinutes(c.unitMinutes, oee);
+      if (minutes > 0) takeBack(minutes, runSegments);
+      placements.set(c, runSegments);
+    }
+    const setupMin = setupBetween(
+      ctx,
+      i > 0 ? visits[i - 1].family : (ctx.initialFamily || null),
+      visit.family
+    );
+    const setupSegments = [];
+    if (setupMin > 0) takeBack(setupMin, setupSegments);
+    setupByVisit.set(visit, setupSegments);
+  }
+
+  // assemble rows in chronological order, segments back to chronological
+  const rows = [];
+  let prevFamily = ctx.initialFamily || null;
+  for (const visit of visits) {
+    const setupSegments = (setupByVisit.get(visit) || []).slice().reverse();
+    visit.codes.forEach((c, idx) => {
+      rows.push({
+        code: c.code,
+        family: visit.family,
+        qty: c.qty,
+        unitIdeal: c.unitMinutes,
+        unitEffective: effectiveUnitMinutes(c.unitMinutes, oee),
+        setupFrom: prevFamily,
+        setupSegments: idx === 0 ? setupSegments : [],
+        runSegments: (placements.get(c) || []).slice().reverse(),
+      });
+    });
+    prevFamily = visit.family;
+  }
+
+  return scheduleMetrics(rows);
 }
 
 /** Schedule for a solver family sequence (codes within a family keep file order). */

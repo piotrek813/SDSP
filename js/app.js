@@ -20,6 +20,9 @@ excelParser.init(window.XLSX);
 
 /* ------------------------------------------------------------- palette -- */
 
+// changeover bars use the brand red — the one thing that must stand out
+const SETUP_BAR_COLOR = "#ed071b";
+
 // muted, print-friendly hues — one per family, assigned in matrix order
 // (18 entries to match HELD_KARP_MAX_FAMILIES)
 const FAMILY_PALETTE = [
@@ -33,6 +36,8 @@ const FAMILY_PALETTE = [
 
 const state = {
   fileName: null,
+  file: null,              // the File object — kept so "Reload" can re-read it
+  isDemo: false,
   parsed: null,            // excel.parseWorkbook result
   catalog: [],             // all codes from the file
   selected: [],            // {code, family, qty, unitMinutes, name} — THE run order
@@ -40,8 +45,12 @@ const state = {
   oee: 0.8,
   startDate: null,
   startAt: "",             // "" = as soon as the calendar allows
+  direction: "forward",    // "forward" from start date, "backward" from due date
+  dueDate: null,
+  dueAt: "",               // "" = end of the last shift on the due day
   shifts: [],              // {name, start, end} minutes
   breaks: [],
+  failures: [],            // one-off production failures {date, start, end}
   initialFamily: "",       // "" = none, "__start__" = matrix start row, else family
   fixedFirst: "",          // "" = free optimisation, else family name
   showIdeal: false,
@@ -52,10 +61,11 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const els = {};
 [
-  "file-input", "btn-file", "btn-demo", "btn-svg", "btn-png", "btn-export-book",
+  "file-input", "btn-file", "btn-demo", "btn-svg", "btn-png", "btn-export-book", "btn-reload",
   "data-summary", "catalog-search", "catalog-list", "selected-list", "selected-empty",
   "oee-range", "oee-number", "loss-value", "loss-note", "loss-bar-ideal", "loss-bar-actual",
-  "start-date", "start-time", "shifts-list", "breaks-list", "btn-add-shift", "btn-add-break",
+  "start-date", "start-time", "direction", "due-date", "due-time",
+  "shifts-list", "breaks-list", "failures-list", "btn-add-shift", "btn-add-break", "btn-add-failure",
   "initial-family", "fixed-first", "toggle-ideal",
   "seq-chips", "solver-note", "gantt-host", "gantt-empty", "legend",
   "m-finish", "m-makespan", "m-setup", "m-run",
@@ -93,7 +103,7 @@ function debounce(fn, ms) {
 els["btn-file"].addEventListener("click", () => els["file-input"].click());
 els["file-input"].addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0];
-  if (file) readWorkbook(file).catch(showLoadError);
+  if (file) { state.file = file; state.isDemo = false; readWorkbook(file).catch(showLoadError); }
 });
 
 const dropZone = document.querySelector(".drop-zone");
@@ -103,7 +113,7 @@ const dropZone = document.querySelector(".drop-zone");
   dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("dragging"); }));
 dropZone.addEventListener("drop", (e) => {
   const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if (file) readWorkbook(file).catch(showLoadError);
+  if (file) { state.file = file; state.isDemo = false; readWorkbook(file).catch(showLoadError); }
 });
 
 async function readWorkbook(file) {
@@ -117,27 +127,105 @@ async function loadDemo() {
   if (!res.ok) throw new Error(`Demo file not available (HTTP ${res.status})`);
   const buf = new Uint8Array(await res.arrayBuffer());
   const parsed = excelParser.parseWorkbookFromBuffer(buf);
-  applyParsed(parsed, "demo-input.xlsx");
+  applyParsed(parsed, "demo-input.xlsx", { isDemo: true });
 }
 
 els["btn-demo"].addEventListener("click", () => loadDemo().catch(showLoadError));
+
+els["btn-reload"].addEventListener("click", () => {
+  if (!state.parsed) {
+    banner("Load a workbook first — there is nothing to reload yet.", true);
+    return;
+  }
+  reloadWorkbook().catch((err) => {
+    console.error(err);
+    banner(`Reload failed: ${err.message}`, true);
+  });
+});
 
 function showLoadError(err) {
   console.error(err);
   banner(`Could not read that workbook: ${err.message}`, true);
 }
 
-function applyParsed(parsed, fileName) {
+/** "Reload workbook": re-read the last opened file so external edits (updated
+ *  setup times, new codes …) flow in, while session work — the queue with its
+ *  order and quantities, the OEE slider, direction and failure windows — is
+ *  preserved. Returns a summary of what changed. */
+async function reloadWorkbook() {
+  if (state.isDemo || !state.file) {
+    // nothing on disk to re-read for the demo; just refetch it
+    const res = await fetch("sample-data/demo-input.xlsx", { cache: "reload" });
+    if (!res.ok) throw new Error(`Demo file not available (HTTP ${res.status})`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const parsed = excelParser.parseWorkbookFromBuffer(buf);
+    applyParsedReloaded(parsed, "demo-input.xlsx");
+    return;
+  }
+  const buf = new Uint8Array(await state.file.arrayBuffer());
+  const parsed = excelParser.parseWorkbookFromBuffer(buf);
+  applyParsedReloaded(parsed, state.fileName);
+}
+
+function applyParsedReloaded(parsed, fileName) {
+  const oldByCode = new Map(state.selected.map((s) => [s.code, s]));
+  const newCodes = parsed.codes.map((c) => ({ ...c, id: c.code }));
+  const knownCodes = new Set(newCodes.map((c) => c.code));
+
+  // session queue survives: same order, same quantities, minus removed codes
+  const queue = state.selected
+    .filter((s) => knownCodes.has(s.code))
+    .map((s) => {
+      const fresh = newByCode(newCodes, s.code);
+      return { ...s, family: fresh.family, unitMinutes: fresh.unitMinutes, name: fresh.name };
+    });
+  const removed = state.selected.filter((s) => !knownCodes.has(s.code)).length;
+  const added = newCodes.filter((c) => !oldByCode.has(c.code)).length;
+
   state.parsed = parsed;
   state.fileName = fileName;
+  state.catalog = newCodes;
+  state.selected = queue;
+  state.optCache = null;
+  // OEE stays a session control; calendar/settings/family state come from the file
+  state.startDate = parsed.settings.startDate || todayStr();
+  state.shifts = (parsed.shifts || []).map((s) => ({ ...s }));
+  state.breaks = (parsed.breaks || []).map((s) => ({ ...s }));
+  state.initialFamily = parsed.settings.initialFamily || "";
+
+  hideBanner();
+  if (removed || added) {
+    banner(`Workbook reloaded — ${added} new code(s) in the catalogue, ${removed} queued code(s) no longer in the file.`, false);
+  } else {
+    banner("Workbook reloaded — queue, quantities and OEE kept.", false);
+  }
+  renderDataSummary();
+  renderCatalog();
+  renderSelected();
+  renderCalendarEditors();
+  renderSolverOptions();
+  recompute();
+}
+
+const newByCode = (codes, code) => codes.find((c) => c.code === code);
+
+function applyParsed(parsed, fileName, { isDemo = false } = {}) {
+  state.parsed = parsed;
+  state.fileName = fileName;
+  state.file = isDemo ? null : state.file;
+  state.isDemo = isDemo;
   state.catalog = parsed.codes.map((c) => ({ ...c, id: c.code }));
   state.mode = "optimal";
   state.optCache = null;
   state.oee = normalizeOee(parsed.settings.oee ?? 0.8);
   state.startDate = parsed.settings.startDate || todayStr();
   state.startAt = "";
+  state.direction = "forward";
+  state.dueDate = null;
+  state.dueAt = "";
   state.shifts = (parsed.shifts || []).map((s) => ({ ...s }));
   state.breaks = (parsed.breaks || []).map((s) => ({ ...s }));
+  state.failures = (parsed.failures || []).map((s) => ({ ...s }));
   state.initialFamily = parsed.settings.initialFamily || "";
   state.fixedFirst = "";
 
@@ -173,6 +261,8 @@ function applyParsed(parsed, fileName) {
   renderCalendarEditors();
   renderSolverOptions();
   syncSessionControls();
+  // Reload only makes sense for a workbook on disk (the demo is refetched)
+  els["btn-reload"].disabled = !state.file || state.isDemo;
   recompute();
 }
 
@@ -373,6 +463,14 @@ els["btn-reoptimise"].addEventListener("click", () => {
 function renderCalendarEditors() {
   els["start-date"].value = state.startDate || "";
   els["start-time"].value = state.startAt || "";
+  els["direction"].value = state.direction;
+  els["due-date"].value = state.dueDate || state.startDate || "";
+  els["due-time"].value = state.dueAt || "";
+  // the anchor fields follow the planning direction
+  const startAnchor = document.querySelector(".field-anchor-start");
+  const dueAnchor = document.querySelector(".field-anchor-due");
+  if (startAnchor) startAnchor.hidden = state.direction === "backward";
+  if (dueAnchor) dueAnchor.hidden = state.direction !== "backward";
 
   const mkRow = (item, kind, removable) => {
     const row = document.createElement("div");
@@ -424,6 +522,57 @@ function renderCalendarEditors() {
     none.textContent = "No breaks defined.";
     breaks.appendChild(none);
   }
+
+  // failure windows: one-off, with a date (unplanned downtime)
+  const failures = els["failures-list"];
+  failures.textContent = "";
+  state.failures.forEach((f) => {
+    const row = document.createElement("div");
+    row.className = "cal-row failure";
+
+    const date = document.createElement("input");
+    date.type = "date";
+    date.value = f.date || state.startDate || todayStr();
+    date.title = "Failure date";
+    date.addEventListener("change", () => {
+      f.date = date.value || state.startDate || todayStr();
+      scheduleRecompute();
+    });
+
+    const start = document.createElement("input");
+    start.type = "time"; start.value = minutesToHMInput(f.start);
+    start.title = "Failure start";
+    start.addEventListener("change", () => {
+      const v = hmToMinutes(start.value);
+      if (v != null) { f.start = v; scheduleRecompute(); }
+    });
+
+    const end = document.createElement("input");
+    end.type = "time"; end.value = minutesToHMInput(f.end);
+    end.title = "Failure end";
+    end.addEventListener("change", () => {
+      const v = hmToMinutes(end.value);
+      if (v != null) { f.end = v; scheduleRecompute(); }
+    });
+
+    const rm = document.createElement("button");
+    rm.className = "icon-btn subtle"; rm.textContent = "×"; rm.title = "Remove";
+    rm.addEventListener("click", () => {
+      const idx = state.failures.indexOf(f);
+      if (idx >= 0) state.failures.splice(idx, 1);
+      renderCalendarEditors();
+      scheduleRecompute();
+    });
+
+    row.append(date, start, end, rm);
+    failures.appendChild(row);
+  });
+  if (!state.failures.length) {
+    const none = document.createElement("p");
+    none.className = "cal-none";
+    none.textContent = "No failures recorded.";
+    failures.appendChild(none);
+  }
 }
 
 els["btn-add-shift"].addEventListener("click", () => {
@@ -436,12 +585,34 @@ els["btn-add-break"].addEventListener("click", () => {
   renderCalendarEditors();
   scheduleRecompute();
 });
+els["btn-add-failure"].addEventListener("click", () => {
+  state.failures.push({
+    date: state.startDate || todayStr(),
+    start: 540,   // 09:00
+    end: 660,     // 11:00 — a plausible 2 h breakdown
+  });
+  renderCalendarEditors();
+  scheduleRecompute();
+});
 els["start-date"].addEventListener("change", () => {
   state.startDate = els["start-date"].value || todayStr();
   scheduleRecompute();
 });
 els["start-time"].addEventListener("change", () => {
   state.startAt = els["start-time"].value || "";
+  scheduleRecompute();
+});
+els["direction"].addEventListener("change", () => {
+  state.direction = els["direction"].value;
+  renderCalendarEditors(); // show/hide the anchor fields
+  scheduleRecompute();
+});
+els["due-date"].addEventListener("change", () => {
+  state.dueDate = els["due-date"].value || state.startDate || todayStr();
+  scheduleRecompute();
+});
+els["due-time"].addEventListener("change", () => {
+  state.dueAt = els["due-time"].value || "";
   scheduleRecompute();
 });
 
@@ -527,10 +698,14 @@ function buildCtx() {
     setup: state.parsed ? state.parsed.setup : {},
     initialFamily: state.initialFamily || null,
     calendar: {
+      direction: state.direction,
       startDate: state.startDate || todayStr(),
       startAt: state.startAt || null,
+      dueDate: state.direction === "backward" ? (state.dueDate || state.startDate || todayStr()) : null,
+      dueAt: state.direction === "backward" ? (state.dueAt || null) : null,
       shifts: state.shifts,
       breaks: state.breaks,
+      failures: state.failures,
       maxDays: 400,
     },
     codes: state.selected.map((s) => ({
@@ -747,25 +922,38 @@ function renderSequence() {
 
 function renderGanttView(sched, idealSched) {
   const colors = familyColors();
-  const off = computeOffIntervals(sched);
+  // failure windows can fall outside the plan (e.g. before a backward plan
+  // starts) — widen the chart window so they stay visible
+  const fails = expandFailureIntervals(sched);
+  let windowStart = null, windowEnd = null;
+  if (fails.length) {
+    windowStart = new Date(Math.min(...fails.map((f) => f.start.getTime())));
+    windowEnd = new Date(Math.max(...fails.map((f) => f.end.getTime())));
+  }
+  const off = computeOffIntervals(sched, windowStart, windowEnd);
 
   const title = `Sequence plan — ${state.fileName || ""}`.trim();
   const oeePct = Math.round(state.oee * 100);
   const orderNote = state.mode === "manual"
     ? "manual order"
-    : state.fixedFirst ? `${state.fixedFirst} pinned first` : "sequence optimised (brute force)";
+    : state.fixedFirst ? `${state.fixedFirst} pinned first` : `sequence optimised (Held–Karp${state.direction === "backward" ? ", backward" : ""})`;
+  const anchorNote = state.direction === "backward"
+    ? (sched.end ? `due ${sched.end.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} ${fmtHM(sched.end)}` : null)
+    : (sched.start ? `starts ${sched.start.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} ${fmtHM(sched.start)}` : null);
   const subtitle = [
     `OEE ${oeePct}%`,
     `changeover ${fmtDur(sched.setupMinutes)}`,
     `production ${fmtDur(sched.runMinutes)}`,
-    sched.start ? `starts ${sched.start.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} ${fmtHM(sched.start)}` : null,
+    anchorNote,
     orderNote,
   ].filter(Boolean).join(" · ");
 
   renderGantt(els["gantt-host"], sched, {
     familyColors: colors,
     offIntervals: off,
-    breakIntervals: expandBreakIntervals(sched),
+    breakIntervals: expandBreakIntervals(sched, windowStart, windowEnd),
+    failIntervals: fails,
+    windowStart, windowEnd,
     idealSchedule: state.showIdeal ? idealSched : null,
     oee: state.oee,
     title, subtitle,
@@ -773,40 +961,70 @@ function renderGanttView(sched, idealSched) {
   renderLegend(colors);
 }
 
-/** Non-working complement of the shift calendar inside the schedule window. */
-function computeOffIntervals(sched) {
+/** Non-working complement of the shift calendar inside the chart window. */
+function computeOffIntervals(sched, windowStart, windowEnd) {
   if (!sched.start || !sched.end) return [];
   const from = sched.start.getTime(), to = sched.end.getTime();
-  const days = Math.ceil((from ? (sched.end - sched.start) / 86400000 : 0) + 2);
+  const win0 = windowStart ? Math.min(windowStart.getTime(), from) : from;
+  const win1 = windowEnd ? Math.max(windowEnd.getTime(), to) : to;
+  // the calendar may reach before the plan (backward plans, failure windows) —
+  // anchor the expansion at the chart window itself
+  const gridStart = new Date(win0);
+  gridStart.setHours(0, 0, 0, 0);
+  const days = Math.ceil((win1 - gridStart.getTime()) / 86400000) + 2;
   const cal = {
-    startDate: state.startDate || todayStr(),
-    shifts: state.shifts, breaks: [],
+    startDate: toLocalDateStr(gridStart),
+    shifts: state.shifts, breaks: [], failures: [],
   };
   const work = expandWorkIntervals(cal, Math.min(400, Math.max(days, 3)));
   const off = [];
-  let prev = from;
+  let prev = win0;
   for (const iv of work) {
     if (iv.start > prev) off.push({ start: new Date(prev), end: iv.start });
     prev = Math.max(prev, iv.end);
   }
-  if (prev < to) off.push({ start: new Date(prev), end: new Date(to) });
+  if (prev < win1) off.push({ start: new Date(prev), end: new Date(win1) });
   return off.filter((o) => o.end.getTime() > o.start.getTime());
 }
 
-/** Daily break occurrences across the schedule window (for hatching). */
-function expandBreakIntervals(sched) {
+const toLocalDateStr = (d) => {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+/** Daily break occurrences across the chart window (for hatching). */
+function expandBreakIntervals(sched, windowStart, windowEnd) {
   if (!sched.start || !sched.end) return [];
+  const w0 = windowStart ? Math.min(windowStart.getTime(), sched.start.getTime()) : sched.start.getTime();
+  const w1 = windowEnd ? Math.max(windowEnd.getTime(), sched.end.getTime()) : sched.end.getTime();
   const out = [];
-  const first = new Date(sched.start); first.setHours(0, 0, 0, 0);
-  const days = Math.ceil((sched.end - first) / 86400000) + 1;
+  const first = new Date(w0); first.setHours(0, 0, 0, 0);
+  const days = Math.ceil((w1 - first) / 86400000) + 1;
   for (let d = 0; d < Math.min(days, 60); d++) {
     for (const b of state.breaks) {
       const base = new Date(first.getTime() + d * 86400000);
       const s = new Date(base); s.setMinutes(b.start, 0, 0);
       const e = new Date(base); e.setMinutes(b.end, 0, 0);
       if (b.end <= b.start) e.setDate(e.getDate() + 1);
-      if (e > sched.start && s < sched.end) out.push({ start: s, end: e });
+      if (e > w0 && s < w1) out.push({ start: s, end: e });
     }
+  }
+  return out;
+}
+
+/** One-off production-failure windows (unclipped — the chart window widens
+ *  to include them). */
+function expandFailureIntervals(sched) {
+  if (!sched.start || !sched.end) return [];
+  const out = [];
+  for (const f of state.failures) {
+    if (!f.date) continue;
+    const base = new Date(f.date + "T00:00:00");
+    if (isNaN(base)) continue;
+    const s = new Date(base); s.setMinutes(f.start, 0, 0);
+    const e = new Date(base); e.setMinutes(f.end, 0, 0);
+    if (f.end <= f.start) e.setDate(e.getDate() + 1);
+    out.push({ start: s, end: e });
   }
   return out;
 }
@@ -829,8 +1047,9 @@ function renderLegend(colors) {
     if (!state.selected.some((s) => s.family === fam)) continue;
     add({ color, text: fam });
   }
-  add({ text: "Changeover", color: "#e07f2a" });
+  add({ text: "Changeover", color: SETUP_BAR_COLOR });
   add({ text: "Break", swatchHtml: '<span class="hatch"></span>' });
+  add({ text: "Failure", swatchHtml: '<span class="hatch fail"></span>' });
   add({ text: "Off shift", color: "#f0ede6" });
   if (state.showIdeal) add({ text: "100% OEE", swatchHtml: '<span class="ghost"></span>' });
 }
@@ -893,6 +1112,18 @@ function buildWorkbook() {
     ]),
     "Order"
   );
+
+  // Failures — one-off unplanned downtime (loaded again on import)
+  if (state.failures.length) {
+    X.utils.book_append_sheet(
+      wb,
+      X.utils.aoa_to_sheet([
+        ["Date", "Start", "End"],
+        ...state.failures.map((f) => [f.date, minutesToHMInput(f.start), minutesToHMInput(f.end)]),
+      ]),
+      "Failures"
+    );
+  }
 
   // Settings — session values
   X.utils.book_append_sheet(

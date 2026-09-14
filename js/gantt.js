@@ -40,7 +40,7 @@ const fmtTime = (d) =>
 const fmtDay = (d) =>
   d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 
-const SETUP_FILL = "#e07f2a";
+const SETUP_FILL = "#ed071b";   // Danfoss red - changeovers must stand out
 
 const LAYOUT = { labelW: 210, padRight: 26, axisH: 36, rowH: 30, gap: 6 };
 
@@ -65,8 +65,14 @@ export function renderGantt(container, schedule, opts = {}) {
   const { labelW, padRight, axisH, rowH, gap } = LAYOUT;
   const width = Math.max(760, (container.clientWidth || 900) - 4);
   const plotW = width - labelW - padRight;
-  const t0 = schedule.start.getTime();
-  const t1 = Math.max(schedule.end.getTime(), t0 + 1);
+  // optional wider window so failure windows outside the plan stay visible
+  const t0 = opts.windowStart
+    ? Math.min(opts.windowStart.getTime(), schedule.start.getTime())
+    : schedule.start.getTime();
+  const t1 = Math.max(
+    opts.windowEnd ? Math.max(opts.windowEnd.getTime(), schedule.end.getTime()) : schedule.end.getTime(),
+    t0 + 1
+  );
   const spanMin = (t1 - t0) / 60000;
   const height = axisH + rows.length * (rowH + 6) + 64;
 
@@ -84,12 +90,12 @@ export function renderGantt(container, schedule, opts = {}) {
   svg.dataset.spanMin = String(spanMin);
 
   // paper + title block (so exports carry context)
-  svg.appendChild(el("rect", { x: 0, y: 0, width, height, fill: "#fffdf9" }));
+  svg.appendChild(el("rect", { x: 0, y: 0, width, height, fill: "#ffffff" }));
   txt(svg, labelW, 15, opts.title || "Production schedule", {
-    "font-size": 13, fill: "#37332b", "font-weight": 700, "letter-spacing": "0.02em",
+    "font-size": 13, fill: "#191919", "font-weight": 700, "letter-spacing": "0.02em",
   });
   if (opts.subtitle) {
-    txt(svg, labelW, 29, opts.subtitle, { "font-size": 10, fill: "#8a8375" });
+    txt(svg, labelW, 29, opts.subtitle, { "font-size": 10, fill: "#60606c" });
   }
 
   /* ---- defs: break hatch -------------------------------------------------- */
@@ -97,11 +103,14 @@ export function renderGantt(container, schedule, opts = {}) {
   defs.innerHTML =
     '<pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">' +
     '<rect width="7" height="7" fill="#f3efe7"/>' +
-    '<line x1="0" y1="0" x2="0" y2="7" stroke="#ddd5c6" stroke-width="2.2"/></pattern>';
+    '<line x1="0" y1="0" x2="0" y2="7" stroke="#d5d5db" stroke-width="2.2"/></pattern>' +
+    '<pattern id="failhatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">' +
+    '<rect width="7" height="7" fill="#fdeaea"/>' +
+    '<line x1="0" y1="0" x2="0" y2="7" stroke="#ed071b" stroke-width="2.4"/></pattern>';
   svg.appendChild(defs);
 
   /* ---- day & hour grid --------------------------------------------------- */
-  const plotTop = axisH - 12;
+  const plotTop = axisH - 5;
   const plotBottom = axisH + rows.length * (rowH + 6) - 6;
 
   const firstMidnight = new Date(t0); firstMidnight.setHours(0, 0, 0, 0);
@@ -117,7 +126,7 @@ export function renderGantt(container, schedule, opts = {}) {
     if (tm > t0) {
       svg.appendChild(el("line", {
         x1: px, x2: px, y1: plotTop, y2: plotBottom,
-        stroke: "#d8d2c6", "stroke-width": 1.2, "stroke-dasharray": "2 3",
+        stroke: "#d9d9df", "stroke-width": 1.2, "stroke-dasharray": "2 3",
       }));
     }
     const label = fmtDay(d);
@@ -125,7 +134,7 @@ export function renderGantt(container, schedule, opts = {}) {
     const labelWpx = label.length * 5.6 + 6;
     if (labelX >= lastLabelEnd && labelX + labelWpx < width - 8) {
       txt(svg, labelX, plotBottom + 24, label, {
-        "font-size": 9.5, fill: "#6f6858", "letter-spacing": "0.02em", "font-weight": 600,
+        "font-size": 9.5, fill: "#60606c", "letter-spacing": "0.02em", "font-weight": 600,
       });
       lastLabelEnd = labelX + labelWpx;
     }
@@ -137,9 +146,9 @@ export function renderGantt(container, schedule, opts = {}) {
     const firstHour = new Date(t0); firstHour.setMinutes(0, 0, 0);
     for (let tm = firstHour.getTime(); tm <= t1; tm += hours * 3600000) {
       const px = x(tm);
-      svg.appendChild(el("line", { x1: px, x2: px, y1: plotTop, y2: plotBottom, stroke: "#efeade", "stroke-width": 1 }));
+      svg.appendChild(el("line", { x1: px, x2: px, y1: plotTop, y2: plotBottom, stroke: "#ececf0", "stroke-width": 1 }));
       if (hours >= 6 || px > labelW) {
-        txt(svg, px + 3, plotBottom + 10, fmtTime(new Date(tm)), { "font-size": 9, fill: "#a49c8c" });
+        txt(svg, px + 3, plotBottom + 10, fmtTime(new Date(tm)), { "font-size": 9, fill: "#9a9aa4" });
       }
     }
   }
@@ -149,7 +158,7 @@ export function renderGantt(container, schedule, opts = {}) {
     const a = Math.max(iv.start.getTime(), t0);
     const b = Math.min(iv.end.getTime(), t1);
     if (b <= a) continue;
-    svg.appendChild(el("rect", { x: x(a), y: plotTop, width: x(b) - x(a), height: plotBottom - plotTop, fill: "#f0ede6" }));
+    svg.appendChild(el("rect", { x: x(a), y: plotTop, width: x(b) - x(a), height: plotBottom - plotTop, fill: "#f5f5f7" }));
   }
   for (const iv of opts.breakIntervals || []) {
     const a = Math.max(iv.start.getTime(), t0);
@@ -160,20 +169,30 @@ export function renderGantt(container, schedule, opts = {}) {
     }));
   }
 
-  svg.appendChild(el("line", { x1: labelW, x2: labelW, y1: plotTop, y2: plotBottom, stroke: "#d8d2c6" }));
+    for (const iv of opts.failIntervals || []) {
+    const a = Math.max(iv.start.getTime(), t0);
+    const b = Math.min(iv.end.getTime(), t1);
+    if (b <= a) continue;
+    svg.appendChild(el("rect", {
+      x: x(a), y: plotTop, width: x(b) - x(a), height: plotBottom - plotTop,
+      fill: "url(#failhatch)", stroke: "#ed071b", "stroke-width": 0.8,
+    }));
+  }
+
+svg.appendChild(el("line", { x1: labelW, x2: labelW, y1: plotTop, y2: plotBottom, stroke: "#d9d9df" }));
 
   /* ---- rows -------------------------------------------------------------- */
   rows.forEach((row, i) => {
     const y = axisH + i * (rowH + 6);
 
     if (i % 2 === 1) {
-      svg.appendChild(el("rect", { x: 0, y, width, height: rowH, fill: "#f8f5ee" }));
+      svg.appendChild(el("rect", { x: 0, y, width, height: rowH, fill: "#fafafc" }));
     }
 
     const chip = colorOf(row.family);
     svg.appendChild(el("rect", { x: 16, y: y + 8, width: 8, height: 12, rx: 2, fill: chip }));
-    txt(svg, 30, y + 14, row.code, { "font-size": 11.5, fill: "#37332b", "font-weight": 600 });
-    txt(svg, 30, y + 25, `${row.family} · ${row.qty} pc`, { "font-size": 9.5, fill: "#8a8375" });
+    txt(svg, 30, y + 14, row.code, { "font-size": 11.5, fill: "#191919", "font-weight": 600 });
+    txt(svg, 30, y + 25, `${row.family} · ${row.qty} pc`, { "font-size": 9.5, fill: "#60606c" });
 
     // start time, placed in the row's empty space — right-aligned before the
     // first bar, or, when that gap is too narrow, just after the row's last
@@ -195,13 +214,13 @@ export function renderGantt(container, schedule, opts = {}) {
       const sx = x(firstSeg.start.getTime());
       if (sx - labelW >= lw) {
         txt(svg, sx - 6, y + rowH / 2 + 3.5, label, {
-          "font-size": 9.5, fill: "#8a8375", "text-anchor": "end",
+          "font-size": 9.5, fill: "#60606c", "text-anchor": "end",
         });
       } else {
         const ex = x(lastSeg.end.getTime());
         if (ex + 6 + lw <= labelW + plotW) {
           txt(svg, ex + 6, y + rowH / 2 + 3.5, label, {
-            "font-size": 9.5, fill: "#8a8375",
+            "font-size": 9.5, fill: "#60606c",
           });
         }
       }
@@ -213,7 +232,7 @@ export function renderGantt(container, schedule, opts = {}) {
       const w = Math.max(x(s.end.getTime()) - x0, 1.5);
       const r = el("rect", {
         x: x0, y: y + 3, width: w, height: rowH - 6, rx: 3,
-        fill: SETUP_FILL, stroke: "#b9631d", "stroke-width": 0.8,
+        fill: SETUP_FILL, stroke: "#b00514", "stroke-width": 0.8,
       });
       r.dataset.kind = "setup";
       r.dataset.row = i;
@@ -323,7 +342,7 @@ export function ganttSVGString(svg) {
   clone.setAttribute("width", w);
   clone.setAttribute("height", h);
   const bg = document.createElementNS(GANTT_NS, "rect");
-  bg.setAttribute("width", w); bg.setAttribute("height", h); bg.setAttribute("fill", "#fffdf9");
+  bg.setAttribute("width", w); bg.setAttribute("height", h); bg.setAttribute("fill", "#ffffff");
   clone.insertBefore(bg, clone.firstChild);
   void tip;
   return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(clone);
@@ -345,7 +364,7 @@ export function downloadPNGFile(svg, filename, scale = 2) {
     const canvas = document.createElement("canvas");
     canvas.width = w * scale; canvas.height = h * scale;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#fffdf9";
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     canvas.toBlob((b) => {
