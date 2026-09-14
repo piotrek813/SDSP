@@ -40,7 +40,7 @@ const fmtTime = (d) =>
 const fmtDay = (d) =>
   d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
 
-const SETUP_FILL = "#ed071b";   // Danfoss red - changeovers must stand out
+const SETUP_FILL = "#feebed";   // Danfoss red - changeovers must stand out
 
 const LAYOUT = { labelW: 210, padRight: 26, axisH: 36, rowH: 30, gap: 6 };
 
@@ -110,7 +110,7 @@ export function renderGantt(container, schedule, opts = {}) {
   svg.appendChild(defs);
 
   /* ---- day & hour grid --------------------------------------------------- */
-  const plotTop = axisH - 5;
+  const plotTop = axisH + 5;
   const plotBottom = axisH + rows.length * (rowH + 6) - 6;
 
   const firstMidnight = new Date(t0); firstMidnight.setHours(0, 0, 0, 0);
@@ -169,7 +169,7 @@ export function renderGantt(container, schedule, opts = {}) {
     }));
   }
 
-    for (const iv of opts.failIntervals || []) {
+  for (const iv of opts.failIntervals || []) {
     const a = Math.max(iv.start.getTime(), t0);
     const b = Math.min(iv.end.getTime(), t1);
     if (b <= a) continue;
@@ -179,7 +179,7 @@ export function renderGantt(container, schedule, opts = {}) {
     }));
   }
 
-svg.appendChild(el("line", { x1: labelW, x2: labelW, y1: plotTop, y2: plotBottom, stroke: "#d9d9df" }));
+  svg.appendChild(el("line", { x1: labelW, x2: labelW, y1: plotTop, y2: plotBottom, stroke: "#d9d9df" }));
 
   /* ---- rows -------------------------------------------------------------- */
   rows.forEach((row, i) => {
@@ -232,7 +232,7 @@ svg.appendChild(el("line", { x1: labelW, x2: labelW, y1: plotTop, y2: plotBottom
       const w = Math.max(x(s.end.getTime()) - x0, 1.5);
       const r = el("rect", {
         x: x0, y: y + 3, width: w, height: rowH - 6, rx: 3,
-        fill: SETUP_FILL, stroke: "#b00514", "stroke-width": 0.8,
+        fill: SETUP_FILL, stroke: "#ed071b", "stroke-width": 1,
       });
       r.dataset.kind = "setup";
       r.dataset.row = i;
@@ -241,7 +241,7 @@ svg.appendChild(el("line", { x1: labelW, x2: labelW, y1: plotTop, y2: plotBottom
       svg.appendChild(r);
       if (w > 52) {
         txt(svg, x0 + 5, y + rowH / 2 + 3.5, `setup ${Math.round((s.end - s.start) / 60000)}m`, {
-          "font-size": 9.5, fill: "#ffffff", "font-weight": 600, "pointer-events": "none",
+          "font-size": 9.5, fill: "#b00514", "font-weight": 600, "pointer-events": "none",
         });
       }
     }

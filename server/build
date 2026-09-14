@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# Cross-builds sdsp.exe for Windows (amd64).
+# Needs Go: https://go.dev/dl
+
+set -e
+
+cd "$(dirname "$0")"
+
+if ! command -v go >/dev/null 2>&1; then
+    echo "Go is not installed."
+    echo "Download it from https://go.dev/dl and try again."
+    exit 1
+fi
+
+if [[ ! -f "assets/icon.ico" ]]; then
+    echo "assets/icon.ico is missing - copy it from the repo or run make-ico."
+    exit 1
+fi
+
+export GOFLAGS=-mod=mod
+export GOOS=windows
+export GOARCH=amd64
+
+echo "Generating Windows version info..."
+go run github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest \
+    -o rsrc_windows_amd64.syso
+
+echo "Building Windows amd64 executable..."
+go build \
+    -trimpath \
+    -ldflags "-H windowsgui -s -w" \
+    -o sdsp.exe \
+    .
+
+echo
+echo "Build successful: sdsp.exe"
+
+mv sdsp.exe Candance.exe

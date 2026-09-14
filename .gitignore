@@ -6,3 +6,7 @@ package-lock.json
 benchmark-results/
 gantt-*.png
 gantt-*.png
+server/sdsp.exe
+server/sdsp.log
+server/rsrc_*.syso
+sdsp-linux-test

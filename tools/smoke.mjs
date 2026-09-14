@@ -58,31 +58,55 @@ const stats = await page.evaluate(() => {
 });
 console.log("demo loaded:", JSON.stringify(stats, null, 2));
 
-// --- workbook download: verify the file itself -----------------------------
-const blobUrl = await page.evaluate(async () => {
-  return new Promise((resolve) => {
-    HTMLAnchorElement.prototype.click = function () { resolve(this.href); };
-    document.getElementById("btn-export-book").click();
+// --- workbook download: save dialog writes a valid file --------------------
+const saved = await page.evaluate(async () => {
+  let captured = null;
+  window.showSaveFilePicker = async () => ({
+    createWritable: async () => ({
+      write: async (data) => { captured = data; },
+      close: async () => {},
+    }),
   });
+  document.getElementById("btn-export-book").click();
+  await new Promise((r) => setTimeout(r, 300));
+  const bytes = new Uint8Array(await captured.arrayBuffer());
+  const wb = XLSX.read(bytes, { type: "array" });
+  return {
+    magic: [...bytes.slice(0, 4)],
+    names: wb.SheetNames.join(","),
+    rows: XLSX.utils.sheet_to_json(wb.Sheets["Order"]).map((r) => [r.Code, r.Qty].join("=")),
+    hasFailuresSheet: "Failures" in wb.Sheets,
+  };
 });
-const orderRows = await page.evaluate(async (url) => {
-  try {
-    const buf = new Uint8Array(await (await fetch(url)).arrayBuffer());
-    const wb = XLSX.read(buf, { type: "array" });
-    const names = wb.SheetNames.join(",");
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets["Order"]).map((r) => [r.Code, r.Qty].join("="));
-    return { names, rows };
-  } catch (e) {
-    return { names: "READ_ERROR: " + e.message, rows: [], url };
-  }
-}, blobUrl);
-console.log("blobUrl:", blobUrl, "| workbook order sheet:", JSON.stringify(orderRows));
-if (!/Order/.test(orderRows.names)) problems.push(`exported workbook missing Order sheet: ${orderRows.names}`);
+console.log("save dialog:", JSON.stringify(saved));
+if (JSON.stringify(saved.magic) !== "[80,75,3,4]") problems.push(`exported file is not an xlsx: ${saved.magic}`);
+if (!/Order/.test(saved.names)) problems.push(`exported workbook missing Order sheet: ${saved.names}`);
+if (!saved.hasFailuresSheet) problems.push("exported workbook missing Failures sheet");
 const expectedOrder = await page.$$eval("#selected-list .queue-name", (els) => els.map((e) => e.textContent));
-const gotOrder = orderRows.rows.map((r) => r.split("=")[0]);
+const gotOrder = saved.rows.map((r) => r.split("=")[0]);
 if (JSON.stringify(gotOrder) !== JSON.stringify(expectedOrder)) {
   problems.push(`order sheet mismatch: ${gotOrder} vs queue ${expectedOrder}`);
 }
+
+// --- branding essentials ----------------------------------------------------
+const brand = await page.evaluate(() => ({
+  logoLoaded: (() => { const img = document.querySelector(".brand-logo"); return !!img && img.complete && img.naturalWidth > 0; })(),
+  favicon: !!document.querySelector('link[rel="icon"][href="favicon.svg"]'),
+  changeoverFill: (() => {
+    const bars = [...document.querySelectorAll('#gantt-host svg rect')].filter(r => r.getAttribute('fill') === '#feebed');
+    return bars.length;
+  })(),
+  summaryStyle: (() => {
+    const el = document.getElementById("data-summary");
+    const cs = getComputedStyle(el);
+    return { bg: cs.backgroundColor, border: cs.borderColor };
+  })(),
+}));
+console.log("brand:", JSON.stringify(brand));
+if (!brand.logoLoaded) problems.push("logo.svg did not load in the header");
+if (!brand.favicon) problems.push("favicon.svg link missing");
+if (brand.changeoverFill === 0) problems.push("no #feebed changeover bars on the chart");
+if (brand.summaryStyle.border !== "rgb(202, 203, 209)") problems.push(`data-summary border wrong: ${brand.summaryStyle.border}`);
 await page.screenshot({ path: SHOT.replace(".png", "-initial.png"), fullPage: true });
 
 if (!stats.chips) problems.push("no sequence chips rendered");

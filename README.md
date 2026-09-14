@@ -16,9 +16,18 @@ reference implementation for tests and benchmarks; the calendar engine
 
 ## Run it
 
-Any static file server from the project root works:
+**Windows (non-technical users):** double-click **`start.bat`**. It launches
+`server/sdsp.exe`, which lives in the **system tray** (red icon), opens your
+default browser at `http://127.0.0.1:3000` automatically and serves the app.
+Close the planner from the tray icon (right-click → *Quit*).
 
-On windows click on start.bat 
+- Rebuild the exe after code changes: run **`server/build.bat`** (needs
+  [Go](https://go.dev/dl)). It embeds the icon (`server/assets/icon.ico`,
+  regenerated with `node tools/make-ico.mjs`) and version info via
+  `goversioninfo`, and builds a windowless (`-H windowsgui`) binary.
+- Prefer the command line? `server/sdsp.exe --port 3000 --no-open --no-tray`
+  runs the same server with flags; `--no-tray` also works on Linux/macOS,
+  where the tray is not implemented.
 
 During development
 ```bash
@@ -93,7 +102,30 @@ ignored. See `sample-data/demo-input.xlsx`, regenerate it with `npm run sample`.
 | `Breaks`       | `Start`, `End`                           | subtracted from shifts                             |
 | `Order`        | `Code`, `Qty`                            | optional — restores a saved queue (written by "Download workbook") |
 | `Failures`     | `Date`, `Start`, `End`                   | optional — one-off unplanned-downtime windows                      |
-| `Settings`     | `Setting`, `Value`                       | `OEE` (0.8, 80 or “80 %”), `Start date`, `Initial family` (`None` = running) |
+
+### The "Start" row in the setup matrix
+
+The optional `Start` row answers one question: *what was the machine running
+before the plan begins?* Its cells are the changeover minutes from that
+previous state into each family. They are charged once, on top of the plan's
+own transitions:
+
+- total setup = `Start → first family` + every changeover *between* the
+  families that follow, exactly as in the matrix;
+- the solver includes that first changeover in its optimum, so the "Start"
+  row can genuinely influence which family should run first;
+- with **Machine starts in → "Start" row from matrix** the app uses it;
+  **No setup (machine running)** skips it — e.g. when the line is already
+  producing the first family, or the previous state is unknown.
+
+Concretely, in the demo workbook the Start row reads `Lubricant 20,
+Primer 25, Sealant 35, Coating 40, Resin 45 …`. A plan that opens on
+Lubricant therefore pays 20 min before its first code (the header shows
+*machine start ⟶ 20′ setup*); opening on Primer would pay the 25 min from
+`Start → Primer` instead. That is why 25 appears when Primer is first — it
+is the cell value, not something the solver invents. If the line starts
+already clean, fill the Start row with zeros or pick **No setup**.
+
 
 ## The solver contract (for comparing implementations)
 

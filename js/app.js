@@ -21,7 +21,7 @@ excelParser.init(window.XLSX);
 /* ------------------------------------------------------------- palette -- */
 
 // changeover bars use the brand red — the one thing that must stand out
-const SETUP_BAR_COLOR = "#ed071b";
+const SETUP_BAR_COLOR = "#feebed";
 
 // muted, print-friendly hues — one per family, assigned in matrix order
 // (18 entries to match HELD_KARP_MAX_FAMILIES)
@@ -84,6 +84,41 @@ const hmToMinutes = (v) => {
 
 const fmtHM = (d) =>
   `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+/* Dates are shown and typed in the Polish dd/mm/yyyy order regardless of the
+ * browser locale; internally everything stays ISO (YYYY-MM-DD). */
+const plDate = {
+  toISO(v) {
+    const s = String(v || "").trim();
+    let m = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(s);   // dd/mm/yyyy, dd.mm.yyyy
+    if (m) {
+      const iso = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      return plDate.valid(iso) ? iso : null;
+    }
+    m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);                 // tolerate ISO typing
+    return m && plDate.valid(s) ? s : null;
+  },
+  fromISO(iso) {
+    if (!iso) return "";
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  },
+  valid(iso) {
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+  },
+};
+
+function bindDateInput(input, getISO, setISO) {
+  input.value = plDate.fromISO(getISO());
+  input.addEventListener("change", () => {
+    const iso = plDate.toISO(input.value);
+    if (iso) setISO(iso);
+    input.value = plDate.fromISO(getISO());   // echo back valid / revert invalid
+    scheduleRecompute();
+  });
+}
 
 function familyColors() {
   const map = new Map();
@@ -188,7 +223,7 @@ function applyParsedReloaded(parsed, fileName) {
   state.selected = queue;
   state.optCache = null;
   // OEE stays a session control; calendar/settings/family state come from the file
-  state.startDate = parsed.settings.startDate || todayStr();
+  state.startDate = defaultStartDate(parsed.settings.startDate);
   state.shifts = (parsed.shifts || []).map((s) => ({ ...s }));
   state.breaks = (parsed.breaks || []).map((s) => ({ ...s }));
   state.initialFamily = parsed.settings.initialFamily || "";
@@ -218,7 +253,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
   state.mode = "optimal";
   state.optCache = null;
   state.oee = normalizeOee(parsed.settings.oee ?? 0.8);
-  state.startDate = parsed.settings.startDate || todayStr();
+  state.startDate = defaultStartDate(parsed.settings.startDate);
   state.startAt = "";
   state.direction = "forward";
   state.dueDate = null;
@@ -271,14 +306,20 @@ function syncSessionControls() {
   const pct = Math.round(state.oee * 100);
   els["oee-range"].value = pct;
   els["oee-number"].value = pct;
-  els["start-date"].value = state.startDate || "";
-  els["start-time"].value = state.startAt || "";
+  els["start-date"].value = plDate.fromISO(state.startDate);
 }
 
 function todayStr() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** The workbook may carry its own start date; stale (past) dates default to
+ *  today so a freshly opened plan never begins in the past. */
+function defaultStartDate(fileDate) {
+  const today = todayStr();
+  return fileDate && fileDate >= today ? fileDate : today;
 }
 
 /* --------------------------------------------------------------- panels -- */
@@ -461,10 +502,10 @@ els["btn-reoptimise"].addEventListener("click", () => {
 /* --------------------------------------------------------------- calendar -- */
 
 function renderCalendarEditors() {
-  els["start-date"].value = state.startDate || "";
+  bindDateInput(els["start-date"], () => state.startDate, (iso) => { state.startDate = iso; });
+  bindDateInput(els["due-date"], () => state.dueDate || state.startDate, (iso) => { state.dueDate = iso; });
   els["start-time"].value = state.startAt || "";
   els["direction"].value = state.direction;
-  els["due-date"].value = state.dueDate || state.startDate || "";
   els["due-time"].value = state.dueAt || "";
   // the anchor fields follow the planning direction
   const startAnchor = document.querySelector(".field-anchor-start");
@@ -531,13 +572,13 @@ function renderCalendarEditors() {
     row.className = "cal-row failure";
 
     const date = document.createElement("input");
-    date.type = "date";
-    date.value = f.date || state.startDate || todayStr();
+    date.type = "text";
+    date.className = "date-input";
+    date.placeholder = "dd/mm/yyyy";
+    date.inputMode = "numeric";
+    date.autocomplete = "off";
     date.title = "Failure date";
-    date.addEventListener("change", () => {
-      f.date = date.value || state.startDate || todayStr();
-      scheduleRecompute();
-    });
+    bindDateInput(date, () => f.date || state.startDate, (iso) => { f.date = iso; });
 
     const start = document.createElement("input");
     start.type = "time"; start.value = minutesToHMInput(f.start);
@@ -594,10 +635,6 @@ els["btn-add-failure"].addEventListener("click", () => {
   renderCalendarEditors();
   scheduleRecompute();
 });
-els["start-date"].addEventListener("change", () => {
-  state.startDate = els["start-date"].value || todayStr();
-  scheduleRecompute();
-});
 els["start-time"].addEventListener("change", () => {
   state.startAt = els["start-time"].value || "";
   scheduleRecompute();
@@ -605,10 +642,6 @@ els["start-time"].addEventListener("change", () => {
 els["direction"].addEventListener("change", () => {
   state.direction = els["direction"].value;
   renderCalendarEditors(); // show/hide the anchor fields
-  scheduleRecompute();
-});
-els["due-date"].addEventListener("change", () => {
-  state.dueDate = els["due-date"].value || state.startDate || todayStr();
   scheduleRecompute();
 });
 els["due-time"].addEventListener("change", () => {
@@ -893,6 +926,8 @@ function renderSequence() {
   if (!state.selected.length) return;
 
   const initial = state.initialFamily === "__start__" ? "__start__" : state.initialFamily || null;
+  const visits = visitsFromCodeOrder(null, state.selected);
+
   if (initial) {
     const chip = document.createElement("span");
     chip.className = "seq-chip machine";
@@ -902,7 +937,7 @@ function renderSequence() {
 
   const setupOf = state.parsed ? state.parsed.setup : {};
   let prev = initial;
-  for (const visit of visitsFromCodeOrder(null, state.selected)) {
+  for (const visit of visits) {
     if (prev) {
       const setup = setupBetween({ setup: state.parsed ? state.parsed.setup : {} }, prev, visit.family);
       const arrow = document.createElement("span");
@@ -1047,7 +1082,7 @@ function renderLegend(colors) {
     if (!state.selected.some((s) => s.family === fam)) continue;
     add({ color, text: fam });
   }
-  add({ text: "Changeover", color: SETUP_BAR_COLOR });
+  add({ text: "Changeover" }, "", "changeover");
   add({ text: "Break", swatchHtml: '<span class="hatch"></span>' });
   add({ text: "Failure", swatchHtml: '<span class="hatch fail"></span>' });
   add({ text: "Off shift", color: "#f0ede6" });
@@ -1067,9 +1102,10 @@ function buildWorkbook() {
 
   // Setup Matrix — original values, session spelling
   const setupAoA = [["From \\ To", ...families]];
-  for (const from of [...families, ...(p.hasStartRow ? ["Start"] : [])]) {
+  const sourceRows = [...families, ...(p.hasStartRow ? ["__start__"] : [])];
+  for (const from of sourceRows) {
     setupAoA.push([
-      from,
+      from === "__start__" ? "Start" : from,   // exported under its matrix name
       ...families.map((to) => (p.setup[`${from}>${to}`] ?? "")),
     ]);
   }
@@ -1113,17 +1149,16 @@ function buildWorkbook() {
     "Order"
   );
 
-  // Failures — one-off unplanned downtime (loaded again on import)
-  if (state.failures.length) {
-    X.utils.book_append_sheet(
-      wb,
-      X.utils.aoa_to_sheet([
-        ["Date", "Start", "End"],
-        ...state.failures.map((f) => [f.date, minutesToHMInput(f.start), minutesToHMInput(f.end)]),
-      ]),
-      "Failures"
-    );
-  }
+  // Failures — one-off unplanned downtime (always present so the sheet can
+  // be filled in directly in Excel; loaded again on import)
+  X.utils.book_append_sheet(
+    wb,
+    X.utils.aoa_to_sheet([
+      ["Date", "Start", "End"],
+      ...state.failures.map((f) => [f.date, minutesToHMInput(f.start), minutesToHMInput(f.end)]),
+    ]),
+    "Failures"
+  );
 
   // Settings — session values
   X.utils.book_append_sheet(
@@ -1140,11 +1175,32 @@ function buildWorkbook() {
   return wb;
 }
 
-els["btn-export-book"].addEventListener("click", () => {
+els["btn-export-book"].addEventListener("click", async () => {
   if (!state.parsed) { banner("Load a workbook first — there is nothing to download yet.", true); return; }
   const X = window.XLSX;
   const out = X.write(buildWorkbook(), { bookType: "xlsx", type: "array" });
   const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+  // Prefer a real save dialog (name + location) when the browser offers one
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: `sequence-plan-${stamp()}.xlsx`,
+        types: [{
+          description: "Excel workbook",
+          accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
+        }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      hideBanner();
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;   // user closed the dialog
+      // anything else (unsupported flags etc.) falls through to the download
+    }
+  }
   const url = URL.createObjectURL(blob);
   triggerDownload(url, `sequence-plan-${stamp()}.xlsx`);
   setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -1181,6 +1237,6 @@ renderCatalog();
 renderSelected();
 renderCalendarEditors();
 renderSolverOptions();
-els["start-date"].value = todayStr();
+els["start-date"].value = plDate.fromISO(todayStr());
 els["oee-range"].value = 80;
 els["oee-number"].value = 80;

@@ -1,25 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cadence — single-machine sequence planner</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232c6e63'/%3E%3Crect x='7' y='8' width='5' height='9' rx='2' fill='%23fffdf8'/%3E%3Crect x='14' y='8' width='11' height='5' rx='2' fill='%23e07f2a'/%3E%3Crect x='14' y='15' width='11' height='2' rx='1' fill='%23fffdf8' opacity='.7'/%3E%3C/svg%3E" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
+
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="brand-name">Cadence</span>
-      <span class="brand-sub">single-machine sequence planner</span>
+      <img src="logo.svg" alt="Danfoss" class="brand-logo" />
+      <span class="brand-sub">Cadence — sequence planner</span>
     </div>
     <div class="topbar-actions">
       <button id="btn-file" class="btn primary" type="button">Open workbook…</button>
       <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm" hidden />
       <button id="btn-demo" class="btn" type="button">Load demo data</button>
-      <button id="btn-reload" class="btn" type="button" title="Re-read the workbook from disk — keeps your queue, quantities and OEE" disabled>Reload</button>
+      <button id="btn-reload" class="btn" type="button"
+        title="Re-read the workbook from disk — keeps your queue, quantities and OEE" disabled>Reload</button>
       <span class="divider" aria-hidden="true"></span>
-      <button id="btn-export-book" class="btn" type="button" title="Download this plan as a workbook (setup matrix, codes, order, settings)">Download workbook</button>
+      <button id="btn-export-book" class="btn" type="button"
+        title="Download this plan as a workbook (setup matrix, codes, order, settings)">Download workbook</button>
       <button id="btn-svg" class="btn" type="button" title="Download the chart as SVG">SVG</button>
       <button id="btn-png" class="btn" type="button" title="Download the chart as PNG">PNG</button>
     </div>
@@ -36,7 +40,8 @@
         <div id="data-summary" class="data-summary" hidden></div>
         <div class="drop-zone" id="drop-zone">
           <p><strong>Drop an .xlsx here</strong><br />or use “Open workbook…”</p>
-          <p class="hint">Sheets: <em>Setup Matrix</em>, <em>Codes</em>,<br /><em>Shifts</em>, <em>Breaks</em>, <em>Settings</em></p>
+          <p class="hint">Sheets: <em>Setup Matrix</em>, <em>Codes</em>,<br /><em>Shifts</em>, <em>Breaks</em>,
+            <em>Settings</em></p>
         </div>
       </section>
 
@@ -51,10 +56,12 @@
           <h2>Order queue</h2>
           <span class="queue-tools">
             <span id="queue-pill" class="mode-pill ok" title="Execution order status">optimal</span>
-            <button id="btn-reoptimise" class="btn tiny" type="button" disabled title="Rerun the optimisation and replace this order with the best sequence">Re-optimise</button>
+            <button id="btn-reoptimise" class="btn tiny" type="button" disabled
+              title="Rerun the optimisation and replace this order with the best sequence">Re-optimise</button>
           </span>
         </div>
-        <p class="hint">Drag or use the arrows to set the run order — mixing families adds changeovers. The amber edge marks a changeover.</p>
+        <p class="hint">Drag or use the arrows to set the run order — mixing families adds changeovers. The amber edge
+          marks a changeover.</p>
         <ul id="selected-list" class="queue-list"></ul>
         <p id="selected-empty" class="hint" hidden>Nothing queued yet — tick codes above.</p>
       </section>
@@ -68,27 +75,30 @@
           </select>
         </label>
         <div class="field-row field-anchor-start">
-          <label>Start date <input id="start-date" type="date" /></label>
+          <label>Start date <input id="start-date" type="text" class="date-input" placeholder="dd/mm/yyyy" inputmode="numeric" autocomplete="off" /></label>
           <label>Not before <input id="start-time" type="time" /></label>
         </div>
         <div class="field-row field-anchor-due" hidden>
-          <label>Due date <input id="due-date" type="date" /></label>
+          <label>Due date <input id="due-date" type="text" class="date-input" placeholder="dd/mm/yyyy" inputmode="numeric" autocomplete="off" /></label>
           <label>Finish by <input id="due-time" type="time" /></label>
         </div>
 
         <div class="cal-block">
-          <div class="cal-head"><span>Shifts</span><button id="btn-add-shift" class="btn tiny" type="button">Add</button></div>
+          <div class="cal-head"><span>Shifts</span><button id="btn-add-shift" class="btn tiny"
+              type="button">Add</button></div>
           <div class="cal-cols"><span>Start</span><span>End</span></div>
           <div id="shifts-list" class="cal-rows"></div>
         </div>
 
         <div class="cal-block">
-          <div class="cal-head"><span>Breaks</span><button id="btn-add-break" class="btn tiny" type="button">Add</button></div>
+          <div class="cal-head"><span>Breaks</span><button id="btn-add-break" class="btn tiny"
+              type="button">Add</button></div>
           <div id="breaks-list"></div>
         </div>
 
         <div class="cal-block">
-          <div class="cal-head"><span>Production failures</span><button id="btn-add-failure" class="btn tiny" type="button">Add</button></div>
+          <div class="cal-head"><span>Production failures</span><button id="btn-add-failure" class="btn tiny"
+              type="button">Add</button></div>
           <div class="cal-cols cal-cols-failure"><span>Date</span><span>Start</span><span>End</span></div>
           <div id="failures-list"></div>
           <p class="hint">One-off unplanned downtime — pauses production and shows red on the chart.</p>
@@ -136,10 +146,14 @@
           <div id="seq-chips" class="seq-chips" aria-label="Optimised family sequence"></div>
         </div>
         <div class="metrics">
-          <div class="metric"><span class="metric-label">Finishes</span><span id="m-finish" class="metric-value">—</span></div>
-          <div class="metric"><span class="metric-label">Span</span><span id="m-makespan" class="metric-value">—</span></div>
-          <div class="metric setup"><span class="metric-label">Changeover</span><span id="m-setup" class="metric-value">—</span></div>
-          <div class="metric"><span class="metric-label">Production</span><span id="m-run" class="metric-value">—</span></div>
+          <div class="metric"><span class="metric-label">Finishes</span><span id="m-finish"
+              class="metric-value">—</span></div>
+          <div class="metric"><span class="metric-label">Span</span><span id="m-makespan" class="metric-value">—</span>
+          </div>
+          <div class="metric setup"><span class="metric-label">Changeover</span><span id="m-setup"
+              class="metric-value">—</span></div>
+          <div class="metric"><span class="metric-label">Production</span><span id="m-run" class="metric-value">—</span>
+          </div>
         </div>
       </div>
 
@@ -163,4 +177,5 @@
   <script src="vendor/xlsx.full.min.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
+
 </html>
