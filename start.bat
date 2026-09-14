@@ -1,1 +1,1 @@
-"./server/sdsp.exe 3000"
+"./server/sdsp.exe" 3000
