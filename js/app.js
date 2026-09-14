@@ -4,7 +4,6 @@
  */
 
 import {
-  solveBruteForce,
   buildSchedule,
   buildScheduleFromCodeOrder,
   visitsFromCodeOrder,
@@ -13,6 +12,7 @@ import {
   normalizeOee,
   setupBetween,
 } from "./solver-bruteforce.js";
+import { solveHeldKarp } from "./solver-heldkarp.js";
 import * as excelParser from "./excel.js";
 import { renderGantt, downloadSVGFile, downloadPNGFile, fmtDur } from "./gantt.js";
 
@@ -21,9 +21,12 @@ excelParser.init(window.XLSX);
 /* ------------------------------------------------------------- palette -- */
 
 // muted, print-friendly hues — one per family, assigned in matrix order
+// (18 entries to match HELD_KARP_MAX_FAMILIES)
 const FAMILY_PALETTE = [
   "#3e6b8c", "#7a9e63", "#b5654a", "#8b7ab0", "#4f9e9b",
   "#c99b3f", "#a2597c", "#7d8a2e", "#b07d3f", "#5d7a94",
+  "#6d8a4e", "#9e6b8c", "#4e7d8a", "#a8843e", "#7a5e9e",
+  "#4e9e7d", "#9e4e5e", "#8a8a4e",
 ];
 
 /* ----------------------------------------------------------------- state -- */
@@ -554,10 +557,10 @@ function getOptimum(ctx) {
   if (state.optCache && state.optCache.key === key) return state.optCache.res;
   let res = null;
   try {
-    res = solveBruteForce(ctx, { fixedFirst: state.fixedFirst || null });
+    res = solveHeldKarp(ctx, { fixedFirst: state.fixedFirst || null });
   } catch (err) {
     if (!err || err.code !== "TOO_MANY_FAMILIES") throw err;
-    // stay null: > MAX_FAMILIES families — heuristics unavailable, plan runs as ordered
+    // stay null: too many families for the DP — plan runs in queue order
   }
   state.optCache = { key, res };
   return res;
@@ -643,13 +646,13 @@ function renderSolveStatus() {
   if (!sched) return;
   let head;
   if (!opt) {
-    head = "Not optimised — too many families for an exhaustive search; running in queue order.";
+    head = "Not optimised — too many families for exact sequencing; running in queue order.";
   } else if (state.mode === "manual") {
     head = gapMin > 1e-6
-      ? `Manual sequence · ${fmtDur(sched.setupMinutes)} changeover — +${fmtDur(gapMin)} more than the best of ${opt.evaluated.toLocaleString()} sequences`
+      ? `Manual sequence · ${fmtDur(sched.setupMinutes)} changeover — +${fmtDur(gapMin)} more than the optimum (Held–Karp)`
       : `Manual sequence · matches the optimum (${fmtDur(sched.setupMinutes)} changeover)`;
   } else {
-    head = `Best of ${opt.evaluated.toLocaleString()} sequences · ${opt.elapsedMs} ms${state.fixedFirst ? ` · ${state.fixedFirst} pinned first` : ""}`;
+    head = `Optimal — Held–Karp DP · ${opt.evaluated.toLocaleString()} states · ${opt.elapsedMs} ms${state.fixedFirst ? ` · ${state.fixedFirst} pinned first` : ""}`;
   }
   $("solver-note").textContent = head;
 }

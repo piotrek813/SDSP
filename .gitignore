@@ -5,3 +5,4 @@ print-page*.png
 package-lock.json
 benchmark-results/
 gantt-*.png
+gantt-*.png

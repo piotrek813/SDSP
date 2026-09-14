@@ -88,7 +88,7 @@ await page.screenshot({ path: SHOT.replace(".png", "-initial.png"), fullPage: tr
 if (!stats.chips) problems.push("no sequence chips rendered");
 if (stats.chips < 7) problems.push(`sequence chips: ${stats.chips} (expected >= 7 visits + machine chip)`);
 if (stats.bars < 20) problems.push(`suspiciously few gantt rects: ${stats.bars}`);
-if (!/Best of/.test(stats.solverNote)) problems.push(`solver note wrong: ${stats.solverNote}`);
+if (!/Held–Karp/.test(stats.solverNote)) problems.push(`solver note wrong: ${stats.solverNote}`);
 if (stats.rows !== 18) problems.push(`catalog rows: ${stats.rows} (expected 18)`);
 
 // --- manual reorder: move a code across a family boundary -----------------
@@ -127,7 +127,7 @@ const reopt = await page.evaluate(() => ({
   firstTwo: [...document.querySelectorAll("#selected-list .queue-name")].slice(0, 2).map((e) => e.textContent),
 }));
 console.log("after Re-optimise:", JSON.stringify(reopt));
-if (!/Best of/.test(reopt.note)) problems.push(`re-optimise note wrong: ${reopt.note}`);
+if (!/Held–Karp/.test(reopt.note)) problems.push(`re-optimise note wrong: ${reopt.note}`);
 if (reopt.setup !== setupOptimal) problems.push(`re-optimise did not restore optimal changeover (${reopt.setup} vs ${setupOptimal})`);
 if (reopt.firstTwo[0] !== "LB-160" || reopt.firstTwo[1] !== "LB-270") {
   problems.push(`queue not restored to optimal head: ${reopt.firstTwo.join(",")}`);

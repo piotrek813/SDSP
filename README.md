@@ -6,11 +6,13 @@ families, an asymmetric family-to-family changeover (setup) matrix, a shift
 calendar with breaks, and an OEE figure, it finds the **best possible family
 sequence** and draws the resulting plan as a Gantt chart.
 
-The first implementation is a **brute-force solver**: it enumerates *all*
-permutations of the product families (up to 10 families → 10! = 3,628,800
-sequences) and keeps the one with the least total changeover time. Because
-production time is fixed by the order quantities, least setup is also earliest
-finish on a recurring calendar.
+The app optimises with **Held–Karp dynamic programming** (`js/solver-heldkarp.js`):
+exact — the same optimum an exhaustive search would find — but O(n²·2ⁿ) instead
+of n!, so up to **18 families** solve in interactive time and a 12-family plan
+takes ~10 ms. The original **brute-force solver** (`js/solver-bruteforce.js`,
+n! permutation enumeration, hard limit 10 families) stays in the tree as the
+reference implementation for tests and benchmarks; the calendar engine
+(`buildSchedule`, shift/break placement) lives there too.
 
 ## Run it
 
@@ -119,7 +121,8 @@ the same contract and add it to the comparison set in `test/solver.test.mjs`.
 ```
 index.html                 the app shell
 css/styles.css             the visual language
-js/solver-bruteforce.js    exact permutation solver + calendar engine
+js/solver-heldkarp.js      exact Held–Karp DP solver — what the app runs
+js/solver-bruteforce.js    exact permutation solver (reference) + calendar engine
 js/excel.js                workbook → problem model
 js/gantt.js                SVG chart + SVG/PNG export
 js/app.js                  state and UI wiring
@@ -171,8 +174,9 @@ n=10  brute-force  5216 ms  ·  held-karp   3.02 ms  ·  greedy+2opt   0.39 ms
 
 ## Known limits
 
-- The exhaustive search stops at **10 families** (≈3.6 M permutations, seconds).
-  Beyond that the app falls back to running the queue as entered and says so.
+- Held–Karp handles up to **18 families** (memory for the DP tables grows like
+  n·2ⁿ, ~45 MB at 18). Beyond that the app falls back to running the queue as
+  entered and says so. (The brute-force reference stops at 10.)
 - Changeovers are calendar-aware but not interruptible mid-setup by design.
 - The calendar models a single recurring day pattern — no weekday exceptions
   or holidays yet.

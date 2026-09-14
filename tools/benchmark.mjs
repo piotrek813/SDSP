@@ -31,6 +31,7 @@ import {
   sequenceSetupMinutes,
   setupBetween,
 } from "../js/solver-bruteforce.js";
+import { solveHeldKarp } from "../js/solver-heldkarp.js";
 import { heldKarpOptimum } from "../test/reference-heldkarp.mjs";
 
 /* --------------------------------------------------------------- options -- */
@@ -41,6 +42,7 @@ const flag = Object.fromEntries(
     return m ? [m[1], m[2] === undefined ? true : m[2]] : [a, true];
   })
 );
+
 const num = (k, d) => (flag[k] === undefined || flag[k] === true ? d : Number(flag[k]));
 
 const MIN_N = num("min", 4);
@@ -53,7 +55,7 @@ const OUT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "b
 /* ----------------------------------------------------------------- models -- */
 
 function mulberry32(seed) {
-  return function () {
+  return function() {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
@@ -156,6 +158,7 @@ function greedy2optSolve(ctx) {
 const SOLVERS = [
   { name: "brute-force", exact: true, fn: (ctx) => solveBruteForce(ctx) },
   { name: "held-karp", exact: true, fn: (ctx) => ({ setupMinutes: heldKarpOptimum(ctx), optimum: true }) },
+  { name: "held-karp-seq", exact: true, fn: (ctx) => solveHeldKarp(ctx) },
   { name: "greedy+2opt", exact: false, fn: greedy2optSolve },
 ];
 
@@ -314,8 +317,8 @@ try {
     "solver,n,instance,seed,setupMinutes,bestKnown,gapPct,timeMs,medianMs,evaluated,optimal,exact,note",
     ...rows.map((r) =>
       [r.solver, r.n, r.instance, r.seed, r.setupMinutes, r.bestKnown,
-        r.gapPct?.toFixed(3) ?? "", r.timeMs?.toFixed(3) ?? "", r.medianMs?.toFixed(3) ?? "",
-        r.evaluated ?? "", r.optimal, r.exact, r.note ?? ""].join(",")
+      r.gapPct?.toFixed(3) ?? "", r.timeMs?.toFixed(3) ?? "", r.medianMs?.toFixed(3) ?? "",
+      r.evaluated ?? "", r.optimal, r.exact, r.note ?? ""].join(",")
     ),
   ].join("\n");
   writeFileSync(`${base}.csv`, csv);
