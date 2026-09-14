@@ -1,0 +1,7 @@
+node_modules/
+smoke-preview*.png
+smoke-print.pdf
+print-page*.png
+package-lock.json
+benchmark-results/
+gantt-*.png

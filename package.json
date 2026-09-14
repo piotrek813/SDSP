@@ -1,0 +1,13 @@
+{
+  "name": "sdsp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Single-machine sequence-dependent scheduling with brute-force family sequencing",
+  "scripts": {
+    "test": "node --test test/solver.test.mjs test/excel.test.mjs",
+    "benchmark": "node tools/benchmark.mjs",
+    "sample": "node tools/make-sample.mjs",
+    "serve": "python3 -m http.server 5173"
+  }
+}
