@@ -216,6 +216,10 @@ function dateAtTime(baseDate, dayOffset, minutes) {
  * `calendar.failures` are one-off production-failure windows — concrete
  * datetimes ({date: "YYYY-MM-DD", start, end}), not recurring — and are cut
  * out of the working time just like breaks.
+ *
+ * `calendar.holidays` are full non-working days ([{date: "YYYY-MM-DD", name}],
+ * typically loaded from a file via the desktop server) — no work is placed on
+ * those days at all.
  */
 export function expandWorkIntervals(calendar, days) {
   const shifts = (calendar.shifts || [])
@@ -239,6 +243,13 @@ export function expandWorkIntervals(calendar, days) {
   const base = new Date(calendar.startDate + "T00:00:00");
   const raw = [];
 
+  // full non-working days (holidays)
+  const holidaySet = new Set(
+    (calendar.holidays || [])
+      .map((h) => (typeof h === "string" ? h : h && h.date))
+      .filter(Boolean)
+  );
+
   const subtractWindow = (segs, ws, we) => {
     const next = [];
     for (const [s0, s1] of segs) {
@@ -250,6 +261,10 @@ export function expandWorkIntervals(calendar, days) {
   };
 
   for (let d = 0; d < days; d++) {
+    const dayStart = new Date(base.getTime() + d * DAY_MS);
+    const dayISO = `${dayStart.getFullYear()}-${String(dayStart.getMonth() + 1).padStart(2, "0")}-${String(dayStart.getDate()).padStart(2, "0")}`;
+    if (holidaySet.has(dayISO)) continue;   // public holiday: no work at all
+
     for (const s of shifts) {
       const start = dateAtTime(base, d, s.a);
       const end = dateAtTime(base, s.b <= s.a ? d + 1 : d, s.b);

@@ -466,7 +466,9 @@ select:focus-visible {
 
 input[type="time"],
 select,
-.date-input {
+.date-input,
+#holidays-path,
+.panel input[type="text"] {
   font: inherit;
   font-size: 12.5px;
   padding: 5px 7px;
@@ -536,6 +538,28 @@ select,
   font-size: 12px;
   color: var(--ink-faint);
   margin: 2px 0 6px;
+}
+
+.holidays-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  max-height: 140px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--ink);
+}
+.holidays-list li {
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+#holidays-status.ok { color: var(--accent-ink); }
+#holidays-status.error { color: var(--accent); }
+.file-label { display: inline-flex; align-items: center; cursor: pointer; }
+.legend-swatch.holiday {
+  background: #fdeaea;
+  border: 1px solid #f3b0b8;
 }
 
 /* ------------------------------------------------------------ machine/oee -- */
@@ -648,6 +672,62 @@ select,
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+}
+
+.results-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.perf-panel .perf-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.perf-panel .oee-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.oee-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.perf-panel .check { margin-top: 12px; }
+
+.output-panel .output-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+.output-cell { display: flex; flex-direction: column; gap: 2px; }
+.output-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.output-sub { font-size: 11px; color: var(--ink-faint); }
+.output-progress {
+  height: 8px;
+  border-radius: 4px;
+  background: #ececf0;
+  overflow: hidden;
+  margin-top: 10px;
+}
+.output-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  background: var(--accent);
+  transition: width 220ms ease;
 }
 
 .results-head {
@@ -867,6 +947,9 @@ select,
 
 @media (max-width: 980px) {
   .layout {
+    grid-template-columns: 1fr;
+  }
+  .results-strip {
     grid-template-columns: 1fr;
   }
 

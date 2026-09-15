@@ -121,10 +121,10 @@ test("an exported workbook round-trips order, quantities and settings", () => {
     ["Break 1", "12:00", "12:30"],
   ]), "Breaks");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-    ["Code", "Qty"],
-    ["B1", 7],
-    ["A2", 3],
-    ["A1", 1],
+    ["Code", "Qty", "Produced"],
+    ["B1", 7, 2],
+    ["A2", 3, 0],
+    ["A1", 1, 1],
   ]), "Order");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ["Setting", "Value"],
@@ -139,11 +139,11 @@ test("an exported workbook round-trips order, quantities and settings", () => {
   const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   const p = parseWorkbookFromBuffer(new Uint8Array(out));
 
-  // order sheet preserves sequence and quantities
+  // order sheet preserves sequence, quantities and produced counts
   assert.deepEqual(p.order, [
-    { code: "B1", qty: 7 },
-    { code: "A2", qty: 3 },
-    { code: "A1", qty: 1 },
+    { code: "B1", qty: 7, produced: 2 },
+    { code: "A2", qty: 3, produced: 0 },
+    { code: "A1", qty: 1, produced: 1 },
   ]);
   assert.equal(p.settings.oee, 0.65);
   assert.equal(p.settings.startDate, "2025-02-10");

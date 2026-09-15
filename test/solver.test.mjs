@@ -556,3 +556,45 @@ test("expandWorkIntervals cuts one-off failures from the shift grid", () => {
   }, 1);
   assert.deepEqual(ivs.map((iv) => [iv.start.getHours(), iv.end.getHours()]), [[6, 8], [10, 14]]);
 });
+
+/* ------------------------------------------------------------- holidays -- */
+
+test("holidays are full non-working days", () => {
+  const ctx = twoShiftCtx();
+  ctx.calendar.holidays = [
+    { date: "2025-01-06", name: "Epiphany" },
+    { date: "2026-12-25" },               // outside the plan — ignored
+  ];
+
+  const sched = buildSchedule(ctx, ["A", "B"]);
+  // the whole first day is skipped: work starts on Jan 7
+  assert.equal(sched.start.getDate(), 7);
+  assert.equal(sched.start.getHours(), 6);
+  for (const row of sched.rows) {
+    for (const s of [...row.setupSegments, ...row.runSegments]) {
+      assert.ok(s.start.getDate() !== 6, "work placed on a holiday");
+    }
+  }
+  // same working minutes as the forward plan without the holiday
+  const clean = buildSchedule({ ...ctx, calendar: { ...ctx.calendar, holidays: [] } }, ["A", "B"]);
+  assert.ok(Math.abs(sched.runMinutes - clean.runMinutes) < 1e-6);
+  assert.ok(Math.abs(sched.setupMinutes - clean.setupMinutes) < 1e-6);
+});
+
+test("holidays also work with backwards planning", () => {
+  const ctx = twoShiftCtx();
+  ctx.calendar.direction = "backward";
+  ctx.calendar.dueDate = "2025-01-07";
+  ctx.calendar.dueAt = "16:00";
+  ctx.calendar.holidays = [{ date: "2025-01-06", name: "Epiphany" }];
+
+  const sched = buildSchedule(ctx, ["A", "B"]);
+  // with Jan 6 gone, everything must fit into Jan 7 before 16:00
+  assert.equal(sched.end.getDate(), 7);
+  assert.equal(sched.end.getHours(), 16);
+  for (const row of sched.rows) {
+    for (const s of [...row.setupSegments, ...row.runSegments]) {
+      assert.ok(s.start.getDate() === 7, "work placed on a holiday");
+    }
+  }
+});

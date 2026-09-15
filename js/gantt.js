@@ -160,6 +160,16 @@ export function renderGantt(container, schedule, opts = {}) {
     if (b <= a) continue;
     svg.appendChild(el("rect", { x: x(a), y: plotTop, width: x(b) - x(a), height: plotBottom - plotTop, fill: "#f5f5f7" }));
   }
+  for (const iv of opts.holidayIntervals || []) {
+    const a = Math.max(iv.start.getTime(), t0);
+    const b = Math.min(iv.end.getTime(), t1);
+    if (b <= a) continue;
+    svg.appendChild(el("rect", {
+      x: x(a), y: plotTop, width: x(b) - x(a), height: plotBottom - plotTop,
+      fill: "#fdeaea", stroke: "#f3b0b8", "stroke-width": 0.8,
+    }));
+  }
+
   for (const iv of opts.breakIntervals || []) {
     const a = Math.max(iv.start.getTime(), t0);
     const b = Math.min(iv.end.getTime(), t1);

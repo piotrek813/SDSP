@@ -111,7 +111,7 @@ export function parseWorkbook(wb) {
     settings: { oee: 0.8, startDate: null, initialFamily: null, direction: "forward", dueDate: null, dueAt: null },
     shifts: [],       // {name, start, end} as minutes since midnight
     breaks: [],
-    order: [],        // optional [{code, qty}] from an "Order" sheet
+    order: [],        // optional [{code, qty, produced}] from an "Order" sheet
     failures: [],     // optional one-off [{date, start, end}] from a "Failures" sheet
     warnings,
     sheetNames: wb.SheetNames.slice(),
@@ -405,6 +405,7 @@ function parseOrderSheet(wb, result, warnings) {
   const head = rows[headerIdx];
   const codeCol = head.findIndex((c) => /^code|sku|product|item/i.test(norm(c)));
   const qtyCol = head.findIndex((c) => /^qty|quantity|amount/i.test(norm(c)));
+  const producedCol = head.findIndex((c) => /produced|actual/i.test(norm(c)));
 
   const order = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -412,7 +413,8 @@ function parseOrderSheet(wb, result, warnings) {
     const code = row[codeCol];
     if (code == null || String(code).trim() === "") continue;
     const qty = qtyCol >= 0 && isNum(row[qtyCol]) ? num(row[qtyCol]) : null;
-    order.push({ code: String(code).trim(), qty });
+    const produced = producedCol >= 0 && isNum(row[producedCol]) ? num(row[producedCol]) : 0;
+    order.push({ code: String(code).trim(), qty, produced });
   }
 
   if (!order.length) {

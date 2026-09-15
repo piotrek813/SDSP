@@ -106,33 +106,27 @@
       </section>
 
       <section class="panel">
+        <h2>Holidays</h2>
+        <label class="field">Holidays file (local or network path)
+          <input id="holidays-path" type="text" autocomplete="off"
+                 placeholder="\\server\share\holidays.txt  ·  C:\plans\holidays.txt" />
+        </label>
+        <div class="field-row">
+          <button id="btn-holidays-load" class="btn tiny" type="button">Load from path</button>
+          <label class="btn tiny file-label">Import file…<input id="holidays-file" type="file" accept=".txt,.csv,.json" hidden /></label>
+        </div>
+        <p id="holidays-status" class="hint">No holidays loaded.</p>
+        <ul id="holidays-list" class="holidays-list"></ul>
+        <p class="hint">One date per line: <em>YYYY-MM-DD;Name</em> — JSON also works. Holidays pause production.</p>
+      </section>
+
+      <section class="panel">
         <h2>Machine &amp; sequence</h2>
         <label class="field">Machine starts in
           <select id="initial-family"></select>
         </label>
         <label class="field">Priority
           <select id="fixed-first"></select>
-        </label>
-      </section>
-
-      <section class="panel">
-        <h2>Performance (this session)</h2>
-        <div class="oee-row">
-          <input id="oee-range" type="range" min="40" max="100" step="1" value="80" aria-label="OEE percent" />
-          <span class="oee-numwrap"><input id="oee-number" type="number" min="5" max="100" value="80" /> %</span>
-        </div>
-        <div class="loss-card">
-          <span class="loss-label">Lost to poor performance</span>
-          <span id="loss-value" class="loss-value">—</span>
-          <div class="loss-bars">
-            <div class="loss-bar ideal" id="loss-bar-ideal"></div>
-            <div class="loss-bar actual" id="loss-bar-actual"></div>
-          </div>
-          <span id="loss-note" class="hint"></span>
-        </div>
-        <label class="check">
-          <input id="toggle-ideal" type="checkbox" />
-          Show the 100% OEE plan as a ghost
         </label>
       </section>
 
@@ -155,6 +149,50 @@
           <div class="metric"><span class="metric-label">Production</span><span id="m-run" class="metric-value">—</span>
           </div>
         </div>
+      </div>
+
+      <div class="results-strip">
+        <section class="panel perf-panel">
+          <h2>Performance (this session)</h2>
+          <div class="loss-card">
+            <span class="loss-label">Lost to poor performance</span>
+            <span id="loss-value" class="loss-value">—</span>
+            <div class="loss-bars">
+              <div class="loss-bar ideal" id="loss-bar-ideal"></div>
+              <div class="loss-bar actual" id="loss-bar-actual"></div>
+            </div>
+            <span id="loss-note" class="hint"></span>
+          </div>
+          <div class="oee-row">
+            <span class="oee-label">OEE</span>
+            <input id="oee-range" type="range" min="40" max="100" step="1" value="80" aria-label="OEE percent" />
+            <span class="oee-numwrap"><input id="oee-number" type="number" min="5" max="100" value="80" /> %</span>
+          </div>
+          <label class="check">
+            <input id="toggle-ideal" type="checkbox" />
+            Show the 100% OEE plan as a ghost
+          </label>
+        </section>
+
+        <section class="panel output-panel">
+          <h2>Output</h2>
+          <div class="output-grid">
+            <div class="output-cell">
+              <span class="metric-label">Expected output</span>
+              <span id="output-expected" class="output-value">—</span>
+              <span class="output-sub" id="output-expected-sub"></span>
+            </div>
+            <div class="output-cell">
+              <span class="metric-label">Parts created</span>
+              <span id="output-actual" class="output-value">0 pc</span>
+              <span class="output-sub">filled from the workbook</span>
+            </div>
+          </div>
+          <div class="output-progress">
+            <div class="output-progress-fill" id="output-progress-fill"></div>
+          </div>
+          <span id="output-note" class="hint">Supervisors fill the “Produced” column in the workbook, then use Reload.</span>
+        </section>
       </div>
 
       <div class="gantt-card">

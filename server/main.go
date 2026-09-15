@@ -35,6 +35,7 @@ func main() {
 
 	root := appRoot()
 	http.Handle("/", http.FileServer(http.Dir(root)))
+	registerAPI(root)
 
 	url := "http://127.0.0.1:" + p
 	ln, err := net.Listen("tcp", "127.0.0.1:"+p)

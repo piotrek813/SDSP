@@ -37,6 +37,7 @@ const FAMILY_PALETTE = [
 const state = {
   fileName: null,
   file: null,              // the File object — kept so "Reload" can re-read it
+  fileHandle: null,        // FileSystemFileHandle — re-reads fresh content even after the file changed on disk
   isDemo: false,
   parsed: null,            // excel.parseWorkbook result
   catalog: [],             // all codes from the file
@@ -51,6 +52,8 @@ const state = {
   shifts: [],              // {name, start, end} minutes
   breaks: [],
   failures: [],            // one-off production failures {date, start, end}
+  holidays: [],            // full non-working days [{date, name}] from a file
+  holidaysPath: "",        // where that file lives (persisted by the Go server)
   initialFamily: "",       // "" = none, "__start__" = matrix start row, else family
   fixedFirst: "",          // "" = free optimisation, else family name
   showIdeal: false,
@@ -62,6 +65,7 @@ const $ = (id) => document.getElementById(id);
 const els = {};
 [
   "file-input", "btn-file", "btn-demo", "btn-svg", "btn-png", "btn-export-book", "btn-reload",
+  "holidays-path", "btn-holidays-load", "holidays-file", "holidays-status", "holidays-list",
   "data-summary", "catalog-search", "catalog-list", "selected-list", "selected-empty",
   "oee-range", "oee-number", "loss-value", "loss-note", "loss-bar-ideal", "loss-bar-actual",
   "start-date", "start-time", "direction", "due-date", "due-time",
@@ -69,6 +73,7 @@ const els = {};
   "initial-family", "fixed-first", "toggle-ideal",
   "seq-chips", "solver-note", "gantt-host", "gantt-empty", "legend",
   "m-finish", "m-makespan", "m-setup", "m-run",
+  "output-expected", "output-actual", "output-progress-fill", "output-note", "output-expected-sub",
   "banner", "queue-pill", "btn-reoptimise",
 ].forEach((id) => { els[id] = $(id); });
 
@@ -135,10 +140,38 @@ function debounce(fn, ms) {
 
 /* ------------------------------------------------------------ file input -- */
 
-els["btn-file"].addEventListener("click", () => els["file-input"].click());
+async function openWorkbook() {
+  // The picker returns a handle that keeps working after the file changes on
+  // disk — which is what makes the Reload button able to re-read it. Older
+  // browsers fall back to the classic file input (Reload then needs a re-pick
+  // if the file changed).
+  if (window.showOpenFilePicker) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{
+          description: "Excel workbook",
+          accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx", ".xlsm"] },
+        }],
+        multiple: false,
+      });
+      state.fileHandle = handle;
+      const file = await handle.getFile();
+      state.file = file;
+      state.isDemo = false;
+      await readWorkbook(file);
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;   // user closed the dialog
+      // otherwise fall through to the legacy input
+    }
+  }
+  els["file-input"].click();
+}
+
+els["btn-file"].addEventListener("click", () => openWorkbook());
 els["file-input"].addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0];
-  if (file) { state.file = file; state.isDemo = false; readWorkbook(file).catch(showLoadError); }
+  if (file) { state.file = file; state.fileHandle = null; state.isDemo = false; readWorkbook(file).catch(showLoadError); }
 });
 
 const dropZone = document.querySelector(".drop-zone");
@@ -148,7 +181,7 @@ const dropZone = document.querySelector(".drop-zone");
   dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("dragging"); }));
 dropZone.addEventListener("drop", (e) => {
   const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if (file) { state.file = file; state.isDemo = false; readWorkbook(file).catch(showLoadError); }
+  if (file) { state.file = file; state.fileHandle = null; state.isDemo = false; readWorkbook(file).catch(showLoadError); }
 });
 
 async function readWorkbook(file) {
@@ -197,9 +230,19 @@ async function reloadWorkbook() {
     applyParsedReloaded(parsed, "demo-input.xlsx");
     return;
   }
-  const buf = new Uint8Array(await state.file.arrayBuffer());
-  const parsed = excelParser.parseWorkbookFromBuffer(buf);
-  applyParsedReloaded(parsed, state.fileName);
+  if (state.fileHandle) {
+    // handle-based open: always reads the file's current content
+    const file = await state.fileHandle.getFile();
+    const buf = new Uint8Array(await file.arrayBuffer());
+    applyParsedReloaded(excelParser.parseWorkbookFromBuffer(buf), file.name);
+    return;
+  }
+  try {
+    const buf = new Uint8Array(await state.file.arrayBuffer());
+    applyParsedReloaded(excelParser.parseWorkbookFromBuffer(buf), state.fileName);
+  } catch (err) {
+    banner(`The workbook changed on disk after it was opened — use “Open workbook…” to pick it again, then Reload will track it.`, true);
+  }
 }
 
 function applyParsedReloaded(parsed, fileName) {
@@ -208,11 +251,17 @@ function applyParsedReloaded(parsed, fileName) {
   const knownCodes = new Set(newCodes.map((c) => c.code));
 
   // session queue survives: same order, same quantities, minus removed codes
+  const producedFromFile = new Map(
+    (parsed.order || []).map((o) => [o.code, o.produced])
+  );
   const queue = state.selected
     .filter((s) => knownCodes.has(s.code))
     .map((s) => {
       const fresh = newByCode(newCodes, s.code);
-      return { ...s, family: fresh.family, unitMinutes: fresh.unitMinutes, name: fresh.name };
+      const produced = producedFromFile.has(s.code) && producedFromFile.get(s.code) != null
+        ? producedFromFile.get(s.code)
+        : (s.produced || 0);
+      return { ...s, family: fresh.family, unitMinutes: fresh.unitMinutes, name: fresh.name, produced };
     });
   const removed = state.selected.filter((s) => !knownCodes.has(s.code)).length;
   const added = newCodes.filter((c) => !oldByCode.has(c.code)).length;
@@ -251,6 +300,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
   state.parsed = parsed;
   state.fileName = fileName;
   state.file = isDemo ? null : state.file;
+  state.fileHandle = isDemo ? null : state.fileHandle;
   state.isDemo = isDemo;
   state.catalog = parsed.codes.map((c) => ({ ...c, id: c.code }));
   state.mode = "optimal";
@@ -264,6 +314,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
   state.shifts = (parsed.shifts || []).map((s) => ({ ...s }));
   state.breaks = (parsed.breaks || []).map((s) => ({ ...s }));
   state.failures = (parsed.failures || []).map((s) => ({ ...s }));
+  state.holidays = [];           // replaced when the holidays file loads
   state.initialFamily = parsed.settings.initialFamily || "";
   state.fixedFirst = "";
   state.direction = parsed.settings.direction === "backward" ? "backward" : "forward";
@@ -281,6 +332,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
         return c ? {
           code: c.code, family: c.family, unitMinutes: c.unitMinutes,
           name: c.name, qty: o.qty != null && o.qty > 0 ? o.qty : (c.defaultQty || 5),
+          produced: o.produced != null && o.produced > 0 ? o.produced : 0,
         } : null;
       })
       .filter(Boolean);
@@ -292,6 +344,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
       unitMinutes: c.unitMinutes,
       name: c.name,
       qty: c.defaultQty || 5,
+      produced: 0,
     }));
   }
 
@@ -302,6 +355,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
   renderCalendarEditors();
   renderSolverOptions();
   syncSessionControls();
+  renderHolidays();
   // Reload only makes sense for a workbook on disk (the demo is refetched)
   els["btn-reload"].disabled = !state.file || state.isDemo;
   recompute();
@@ -362,7 +416,7 @@ function renderCatalog() {
     box.checked = checked;
     box.addEventListener("change", () => {
       if (box.checked) {
-        state.selected.push({ code: c.code, family: c.family, unitMinutes: c.unitMinutes, name: c.name, qty: c.defaultQty || 5 });
+        state.selected.push({ code: c.code, family: c.family, unitMinutes: c.unitMinutes, name: c.name, qty: c.defaultQty || 5, produced: 0 });
       } else {
         state.selected = state.selected.filter((s) => s.code !== c.code);
       }
@@ -655,6 +709,121 @@ els["due-time"].addEventListener("change", () => {
   scheduleRecompute();
 });
 
+/* -------------------------------------------------------------- holidays -- */
+
+// Holidays live in a file that can sit on a network share; the desktop server
+// (sdsp.exe) reads it from disk and exposes it as JSON. When the app is served
+// by something else (e.g. plain `npm run serve`) the API is absent and only
+// the "Import file…" path works.
+
+const holidaysApiAvailable = () => !!state.parsed && !!state.serverApi;
+
+async function initHolidays() {
+  // ask the desktop server for the persisted path + parsed holidays
+  try {
+    const res = await fetch("/api/holidays");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    state.serverApi = true;
+    const data = await res.json();
+    applyHolidays(data, { quiet: true });
+  } catch {
+    state.serverApi = false;
+    renderHolidays("Holiday file loading needs the desktop server (sdsp.exe) — or import a file below.");
+  }
+}
+
+function applyHolidays(data, { quiet = false } = {}) {
+  state.holidaysPath = data.path || "";
+  state.holidays = Array.isArray(data.holidays) ? data.holidays : [];
+  els["holidays-path"].value = state.holidaysPath;
+  if (data.error) renderHolidays(`Could not load holidays: ${data.error}`, "error");
+  else if (quiet && !state.holidays.length) renderHolidays("No holidays file configured.");
+  else renderHolidays(`${state.holidays.length} holiday(s) loaded${state.holidaysPath ? ` from ${state.holidaysPath}` : ""}.`, "ok");
+  scheduleRecompute();
+}
+
+async function loadHolidaysFromPath() {
+  const path = els["holidays-path"].value.trim();
+  if (!path) { renderHolidays("Enter a file path first.", "error"); return; }
+  if (!holidaysApiAvailable()) {
+    renderHolidays("Reading paths needs the desktop server (sdsp.exe) — use “Import file…” here.", "error");
+    return;
+  }
+  try {
+    const res = await fetch("/api/holidays", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ holidaysPath: path }),
+    });
+    const data = await res.json();
+    applyHolidays(data);
+  } catch (err) {
+    renderHolidays(`Could not reach the planner server: ${err.message}`, "error");
+  }
+}
+
+/** Mirrors the Go parser for the browser-side "Import file…" path. */
+function parseHolidayText(text) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of String(text).split("\n")) {
+    const line = raw.replace(/\r$/, "").trim();
+    if (!line || line.startsWith("#") || line.startsWith("//")) continue;
+    if (line.startsWith("[") || line.startsWith("{")) continue; // JSON: use path loading
+    const fields = line.split(/[;,\t]/).map((x) => x.trim()).filter(Boolean);
+    if (!fields.length) continue;
+    const iso = plDate.toISO(fields[0]) || fields[0];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || seen.has(iso)) continue;
+    seen.add(iso);
+    out.push({ date: iso, name: fields[1] || "" });
+  }
+  return out.sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+function importHolidaysFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const holidays = parseHolidayText(String(reader.result));
+    if (!holidays.length) { renderHolidays(`No usable holiday lines found in ${file.name}.`, "error"); return; }
+    state.holidaysPath = "";
+    state.holidays = holidays;
+    renderHolidays(`${holidays.length} holiday(s) imported from ${file.name}.`, "ok");
+    scheduleRecompute();
+  };
+  reader.onerror = () => renderHolidays(`Could not read ${file.name}.`, "error");
+  reader.readAsText(file);
+}
+
+function renderHolidays(message, kind) {
+  const status = els["holidays-status"];
+  status.textContent = message || "";
+  status.classList.toggle("ok", kind === "ok");
+  status.classList.toggle("error", kind === "error");
+
+  const list = els["holidays-list"];
+  list.textContent = "";
+  const sorted = state.holidays.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const shown = sorted.slice(0, 40);
+  for (const h of shown) {
+    const li = document.createElement("li");
+    li.textContent = plDate.fromISO(h.date) + (h.name ? ` — ${h.name}` : "");
+    list.appendChild(li);
+  }
+  if (sorted.length > shown.length) {
+    const li = document.createElement("li");
+    li.className = "cal-none";
+    li.textContent = `…and ${sorted.length - shown.length} more`;
+    list.appendChild(li);
+  }
+}
+
+els["btn-holidays-load"].addEventListener("click", () => loadHolidaysFromPath());
+els["holidays-file"].addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (file) importHolidaysFile(file);
+  e.target.value = "";
+});
+
 /* ------------------------------------------------------------ OEE + loss -- */
 
 els["oee-range"].addEventListener("input", onOeeChange);
@@ -745,6 +914,7 @@ function buildCtx() {
       shifts: state.shifts,
       breaks: state.breaks,
       failures: state.failures,
+      holidays: state.holidays,
       maxDays: 400,
     },
     codes: state.selected.map((s) => ({
@@ -836,6 +1006,7 @@ function recompute() {
   renderSolveStatus();
   renderQueueStatus();
   renderMetrics(sched, idealSched);
+  renderOutput();
   renderSequence();
   renderGanttView(sched, idealSched);
   hideEmpty();
@@ -896,6 +1067,19 @@ function renderQueueStatus() {
     pill.className = "mode-pill ok";
     btn.disabled = true;   // nothing to gain
   }
+}
+
+function renderOutput() {
+  const expected = state.selected.reduce((sum, s) => sum + (s.qty || 0), 0);
+  const actual = state.selected.reduce((sum, s) => sum + (s.produced || 0), 0);
+  $("output-expected").textContent = `${expected} pc`;
+  $("output-expected-sub").textContent = `${state.selected.length} code(s) queued`;
+  $("output-actual").textContent = `${actual} pc`;
+  const pct = expected > 0 ? Math.min(100, (actual / expected) * 100) : 0;
+  $("output-progress-fill").style.width = `${pct}%`;
+  $("output-note").textContent = expected > 0 && actual > 0
+    ? `${Math.round(pct)}% of the plan produced.`
+    : "Supervisors fill the “Produced” column in the workbook, then use Reload.";
 }
 
 function resetMetrics() {
@@ -994,6 +1178,7 @@ function renderGanttView(sched, idealSched) {
     offIntervals: off,
     breakIntervals: expandBreakIntervals(sched, windowStart, windowEnd),
     failIntervals: fails,
+    holidayIntervals: expandHolidayIntervals(sched),
     windowStart, windowEnd,
     idealSchedule: state.showIdeal ? idealSched : null,
     oee: state.oee,
@@ -1016,6 +1201,7 @@ function computeOffIntervals(sched, windowStart, windowEnd) {
   const cal = {
     startDate: toLocalDateStr(gridStart),
     shifts: state.shifts, breaks: [], failures: [],
+    holidays: state.holidays,
   };
   const work = expandWorkIntervals(cal, Math.min(400, Math.max(days, 3)));
   const off = [];
@@ -1049,6 +1235,21 @@ function expandBreakIntervals(sched, windowStart, windowEnd) {
       if (b.end <= b.start) e.setDate(e.getDate() + 1);
       if (e > w0 && s < w1) out.push({ start: s, end: e });
     }
+  }
+  return out;
+}
+
+/** Full-day holiday bands across the chart window. */
+function expandHolidayIntervals(sched) {
+  if (!sched.start || !sched.end) return [];
+  const out = [];
+  for (const h of state.holidays) {
+    if (!h.date) continue;
+    const base = new Date(h.date + "T00:00:00");
+    if (isNaN(base)) continue;
+    const s = new Date(base); s.setHours(0, 0, 0, 0);
+    const e = new Date(base.getTime() + 86400000);
+    if (e > sched.start && s < sched.end) out.push({ start: s, end: e });
   }
   return out;
 }
@@ -1090,6 +1291,7 @@ function renderLegend(colors) {
   }
   add({ text: "Changeover" }, "", "changeover");
   add({ text: "Break", swatchHtml: '<span class="hatch"></span>' });
+  add({ text: "Holiday" }, "", "holiday");
   add({ text: "Failure", swatchHtml: '<span class="hatch fail"></span>' });
   add({ text: "Off shift", color: "#f0ede6" });
   if (state.showIdeal) add({ text: "100% OEE", swatchHtml: '<span class="ghost"></span>' });
@@ -1146,11 +1348,13 @@ function buildWorkbook() {
   );
 
   // Order — the queue as it will run, so a manual plan survives a round trip
+  // Order — the queue as it will run, plus a "Produced" column the shift
+  // supervisor fills in; reloading the workbook updates the output panel
   X.utils.book_append_sheet(
     wb,
     X.utils.aoa_to_sheet([
-      ["Code", "Qty"],
-      ...state.selected.map((s) => [s.code, s.qty]),
+      ["Code", "Qty", "Produced"],
+      ...state.selected.map((s) => [s.code, s.qty, s.produced || 0]),
     ]),
     "Order"
   );

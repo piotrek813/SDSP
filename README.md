@@ -28,6 +28,10 @@ Close the planner from the tray icon (right-click → *Quit*).
 - Prefer the command line? `server/sdsp.exe --port 3000 --no-open --no-tray`
   runs the same server with flags; `--no-tray` also works on Linux/macOS,
   where the tray is not implemented.
+- The server also exposes the planner's tiny API: `GET/POST /api/settings`
+  persists configuration (currently the holidays-file location, kept in
+  `sdsp-settings.json` next to the app), and `GET/POST /api/holidays` reads
+  that file fresh on every call.
 
 During development
 ```bash
@@ -117,6 +121,19 @@ own transitions:
 - with **Machine starts in → "Start" row from matrix** the app uses it;
   **No setup (machine running)** skips it — e.g. when the line is already
   producing the first family, or the previous state is unknown.
+
+### Holidays
+
+Holidays are full non-working days loaded from a file that can live anywhere —
+a local folder or a network share. Configure the location in the **Holidays**
+panel; the desktop server remembers it (`sdsp-settings.json`) and reads the
+file fresh on every plan, so edits on the share apply without restarting.
+
+File format (a sample ships as `sample-data/holidays.txt`): one holiday per
+line, `YYYY-MM-DD;Name` — `DD.MM.YYYY` dates, commas/tabs as separators, `#`
+comments and a JSON array all work too. Imported holidays pause production
+like breaks, render as light-red bands on the chart, and are honored by both
+forward and backward planning.
 
 Concretely, in the demo workbook the Start row reads `Lubricant 20,
 Primer 25, Sealant 35, Coating 40, Resin 45 …`. A plan that opens on
