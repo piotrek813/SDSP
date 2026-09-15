@@ -41,7 +41,8 @@
         <div class="drop-zone" id="drop-zone">
           <p><strong>Drop an .xlsx here</strong><br />or use “Open workbook…”</p>
           <p class="hint">Sheets: <em>Setup Matrix</em>, <em>Codes</em>,<br /><em>Shifts</em>, <em>Breaks</em>,
-            <em>Settings</em></p>
+            <em>Settings</em>
+          </p>
         </div>
       </section>
 
@@ -75,11 +76,13 @@
           </select>
         </label>
         <div class="field-row field-anchor-start">
-          <label>Start date <input id="start-date" type="text" class="date-input" placeholder="dd/mm/yyyy" inputmode="numeric" autocomplete="off" /></label>
+          <label>Start date <input id="start-date" type="text" class="date-input" placeholder="dd/mm/yyyy"
+              inputmode="numeric" autocomplete="off" /></label>
           <label>Not before <input id="start-time" type="time" /></label>
         </div>
         <div class="field-row field-anchor-due" hidden>
-          <label>Due date <input id="due-date" type="text" class="date-input" placeholder="dd/mm/yyyy" inputmode="numeric" autocomplete="off" /></label>
+          <label>Due date <input id="due-date" type="text" class="date-input" placeholder="dd/mm/yyyy"
+              inputmode="numeric" autocomplete="off" /></label>
           <label>Finish by <input id="due-time" type="time" /></label>
         </div>
 
@@ -108,15 +111,14 @@
       <section class="panel">
         <h2>Holidays</h2>
         <label class="field">Holidays file (local or network path)
-          <input id="holidays-path" type="text" autocomplete="off"
-                 placeholder="\\server\share\holidays.txt  ·  C:\plans\holidays.txt" />
+          <input id="holidays-path" type="text" autocomplete="off" placeholder="" />
         </label>
         <div class="field-row">
           <button id="btn-holidays-load" class="btn tiny" type="button">Load from path</button>
-          <label class="btn tiny file-label">Import file…<input id="holidays-file" type="file" accept=".txt,.csv,.json" hidden /></label>
+          <label class="btn tiny file-label">Import file…<input id="holidays-file" type="file" accept=".txt,.csv,.json"
+              hidden /></label>
         </div>
         <p id="holidays-status" class="hint">No holidays loaded.</p>
-        <ul id="holidays-list" class="holidays-list"></ul>
         <p class="hint">One date per line: <em>YYYY-MM-DD;Name</em> — JSON also works. Holidays pause production.</p>
       </section>
 
@@ -191,7 +193,8 @@
           <div class="output-progress">
             <div class="output-progress-fill" id="output-progress-fill"></div>
           </div>
-          <span id="output-note" class="hint">Supervisors fill the “Produced” column in the workbook, then use Reload.</span>
+          <span id="output-note" class="hint">Supervisors fill the “Produced” column in the workbook, then use
+            Reload.</span>
         </section>
       </div>
 

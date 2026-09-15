@@ -65,7 +65,7 @@ const $ = (id) => document.getElementById(id);
 const els = {};
 [
   "file-input", "btn-file", "btn-demo", "btn-svg", "btn-png", "btn-export-book", "btn-reload",
-  "holidays-path", "btn-holidays-load", "holidays-file", "holidays-status", "holidays-list",
+  "holidays-path", "btn-holidays-load", "holidays-file", "holidays-status",
   "data-summary", "catalog-search", "catalog-list", "selected-list", "selected-empty",
   "oee-range", "oee-number", "loss-value", "loss-note", "loss-bar-ideal", "loss-bar-actual",
   "start-date", "start-time", "direction", "due-date", "due-time",
@@ -799,22 +799,6 @@ function renderHolidays(message, kind) {
   status.textContent = message || "";
   status.classList.toggle("ok", kind === "ok");
   status.classList.toggle("error", kind === "error");
-
-  const list = els["holidays-list"];
-  list.textContent = "";
-  const sorted = state.holidays.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
-  const shown = sorted.slice(0, 40);
-  for (const h of shown) {
-    const li = document.createElement("li");
-    li.textContent = plDate.fromISO(h.date) + (h.name ? ` — ${h.name}` : "");
-    list.appendChild(li);
-  }
-  if (sorted.length > shown.length) {
-    const li = document.createElement("li");
-    li.className = "cal-none";
-    li.textContent = `…and ${sorted.length - shown.length} more`;
-    list.appendChild(li);
-  }
 }
 
 els["btn-holidays-load"].addEventListener("click", () => loadHolidaysFromPath());
