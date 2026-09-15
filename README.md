@@ -1,4 +1,8 @@
-# Cadence — single-machine sequence planner
+# Cadence — Man plans, God laughs
+
+Always behind a schedule? That's life as saying goes but now you can we behind an optimized schedule.
+
+Sounds better? Alrighty, then let's get started!
 
 A dependency-light web app that solves the **single-machine, sequence-dependent
 scheduling problem**: given a set of order lines (codes) grouped into product
