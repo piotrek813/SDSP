@@ -11,4 +11,3 @@ server/sdsp.log
 server/rsrc_*.syso
 sdsp-linux-test
 server/sdsp-settings.json
-sample-data/holidays.txt
