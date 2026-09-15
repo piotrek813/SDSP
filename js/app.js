@@ -227,6 +227,9 @@ function applyParsedReloaded(parsed, fileName) {
   state.shifts = (parsed.shifts || []).map((s) => ({ ...s }));
   state.breaks = (parsed.breaks || []).map((s) => ({ ...s }));
   state.initialFamily = parsed.settings.initialFamily || "";
+  state.direction = parsed.settings.direction === "backward" ? "backward" : "forward";
+  state.dueDate = parsed.settings.dueDate || null;
+  state.dueAt = parsed.settings.dueAt || "";
 
   hideBanner();
   if (removed || added) {
@@ -263,6 +266,9 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
   state.failures = (parsed.failures || []).map((s) => ({ ...s }));
   state.initialFamily = parsed.settings.initialFamily || "";
   state.fixedFirst = "";
+  state.direction = parsed.settings.direction === "backward" ? "backward" : "forward";
+  state.dueDate = parsed.settings.dueDate || null;
+  state.dueAt = parsed.settings.dueAt || "";
 
   // An Order sheet (from "Download workbook") restores the exact queue —
   // order and quantities — and starts in manual mode so the plan is what
@@ -1161,16 +1167,20 @@ function buildWorkbook() {
   );
 
   // Settings — session values
-  X.utils.book_append_sheet(
-    wb,
-    X.utils.aoa_to_sheet([
-      ["Setting", "Value"],
-      ["OEE", state.oee],
-      ["Start date", state.startDate || todayStr()],
-      ["Initial family", state.initialFamily === "" ? "None" : state.initialFamily === "__start__" ? "Start" : state.initialFamily],
-    ]),
-    "Settings"
-  );
+  const settingsRows = [
+    ["OEE", state.oee],
+    ["Start date", state.startDate || todayStr()],
+    ["Planning direction", state.direction === "backward" ? "Backward" : "Forward"],
+  ];
+  if (state.direction === "backward") {
+    settingsRows.push(["Due date", state.dueDate || state.startDate || todayStr()]);
+    if (state.dueAt) settingsRows.push(["Due time", state.dueAt]);
+  }
+  settingsRows.push([
+    "Initial family",
+    state.initialFamily === "" ? "None" : state.initialFamily === "__start__" ? "Start" : state.initialFamily,
+  ]);
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([["Setting", "Value"], ...settingsRows]), "Settings");
 
   return wb;
 }

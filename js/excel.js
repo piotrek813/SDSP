@@ -108,7 +108,7 @@ export function parseWorkbook(wb) {
     setup: {},        // "A>B" -> minutes (canonical family spelling)
     families: [],     // all families, matrix order first
     hasStartRow: false,
-    settings: { oee: 0.8, startDate: null, initialFamily: null },
+    settings: { oee: 0.8, startDate: null, initialFamily: null, direction: "forward", dueDate: null, dueAt: null },
     shifts: [],       // {name, start, end} as minutes since midnight
     breaks: [],
     order: [],        // optional [{code, qty}] from an "Order" sheet
@@ -358,6 +358,16 @@ function parseSettings(wb, result, warnings) {
       if (isFinite(n) && n > 0) result.settings.oee = n > 1 ? n / 100 : n;
     } else if (/start/.test(k) && /date|day|from|week/.test(k)) {
       result.settings.startDate = parseDateValue(v);
+    } else if (/direction|planning/.test(k)) {
+      result.settings.direction = /back/i.test(norm(v)) ? "backward" : "forward";
+    } else if (/due/.test(k) && /date|day/.test(k)) {
+      result.settings.dueDate = parseDateValue(v);
+    } else if (/due|finish/.test(k) && /time|at\b|by\b/.test(k)) {
+      const mins = parseTimeToMinutes(v);
+      if (mins != null) {
+        result.settings.dueAt =
+          `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+      }
     } else if (/initial|current|machine/.test(k) && /famil|state|setup|changeover/.test(k)) {
       const s = String(v).trim();
       // explicit "None" keeps the machine running (no initial setup)

@@ -71,17 +71,22 @@ const saved = await page.evaluate(async () => {
   await new Promise((r) => setTimeout(r, 300));
   const bytes = new Uint8Array(await captured.arrayBuffer());
   const wb = XLSX.read(bytes, { type: "array" });
+  const settings = Object.fromEntries(
+    XLSX.utils.sheet_to_json(wb.Sheets["Settings"]).map((r) => [r.Setting, r.Value])
+  );
   return {
     magic: [...bytes.slice(0, 4)],
     names: wb.SheetNames.join(","),
     rows: XLSX.utils.sheet_to_json(wb.Sheets["Order"]).map((r) => [r.Code, r.Qty].join("=")),
     hasFailuresSheet: "Failures" in wb.Sheets,
+    direction: settings["Planning direction"],
   };
 });
 console.log("save dialog:", JSON.stringify(saved));
 if (JSON.stringify(saved.magic) !== "[80,75,3,4]") problems.push(`exported file is not an xlsx: ${saved.magic}`);
 if (!/Order/.test(saved.names)) problems.push(`exported workbook missing Order sheet: ${saved.names}`);
 if (!saved.hasFailuresSheet) problems.push("exported workbook missing Failures sheet");
+if (saved.direction !== "Forward") problems.push(`exported planning direction wrong: ${saved.direction}`);
 const expectedOrder = await page.$$eval("#selected-list .queue-name", (els) => els.map((e) => e.textContent));
 const gotOrder = saved.rows.map((r) => r.split("=")[0]);
 if (JSON.stringify(gotOrder) !== JSON.stringify(expectedOrder)) {

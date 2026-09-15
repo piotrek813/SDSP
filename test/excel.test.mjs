@@ -50,6 +50,8 @@ test("sample workbook parses into the expected model", () => {
   assert.equal(p.settings.oee, 0.8);
   assert.equal(p.settings.startDate, "2025-01-06");
 
+  assert.equal(p.settings.direction, "forward");
+  assert.equal(p.settings.dueDate, null);
   assert.deepEqual(p.shifts, [
     { name: "Morning", start: 360, end: 840 },
     { name: "Afternoon", start: 840, end: 1320 },
@@ -128,6 +130,9 @@ test("an exported workbook round-trips order, quantities and settings", () => {
     ["Setting", "Value"],
     ["OEE", 0.65],
     ["Start date", "2025-02-10"],
+    ["Planning direction", "Backward"],
+    ["Due date", "2025-02-12"],
+    ["Due time", "16:00"],
     ["Initial family", "None"],
   ]), "Settings");
 
@@ -144,6 +149,10 @@ test("an exported workbook round-trips order, quantities and settings", () => {
   assert.equal(p.settings.startDate, "2025-02-10");
   // explicit "None" keeps the machine running instead of falling back to Start
   assert.equal(p.settings.initialFamily, "");
+  // planning mode round-trips
+  assert.equal(p.settings.direction, "backward");
+  assert.equal(p.settings.dueDate, "2025-02-12");
+  assert.equal(p.settings.dueAt, "16:00");
   // the Start row is still available as an option
   assert.equal(p.hasStartRow, true);
   assert.equal(p.setup["__start__>B"], 35);
