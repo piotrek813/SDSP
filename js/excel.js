@@ -108,7 +108,7 @@ export function parseWorkbook(wb) {
     setup: {},        // "A>B" -> minutes (canonical family spelling)
     families: [],     // all families, matrix order first
     hasStartRow: false,
-    settings: { oee: 0.8, startDate: null, initialFamily: null, direction: "forward", dueDate: null, dueAt: null },
+    settings: { oee: 0.8, startDate: null, initialFamily: null, direction: "forward", dueDate: null, dueAt: null, crew: 1, crewFactor: "1" },
     shifts: [],       // {name, start, end} as minutes since midnight
     breaks: [],
     order: [],        // optional [{code, qty, produced}] from an "Order" sheet
@@ -214,7 +214,8 @@ function parseCodes(wb, result, warnings) {
 
   const codeCol = colOf([/^code$/, /^code/, /sku/, /product/, /item/, /part/]);
   const famCol = colOf([/family/, /^fam\b/, /group/]);
-  const timeCol = colOf([/unit.*time/, /cycle.*time/, /time.*per.*unit/, /time ?\(?,?min/, /^time/, /^minutes?/, /^min$/]);
+  const timeCol = colOf([/unit.*time/, /cycle.*time/, /time.*per.*unit/, /time ?\(?,?min/, /time ?\(?,?s\)?/, /^time/, /^minutes?/, /^min$/, /^seconds?/, /^s\b/]);
+  const unitInSeconds = timeCol >= 0 && /\(s\)|\bsec|seconds|\bs\b(?!\w)/i.test(norm(head[timeCol]));
   const nameCol = colOf([/description/, /^name$/, /title/]);
   const qtyCol = colOf([/^qty/, /quantity/, /amount/]);
 
@@ -232,10 +233,11 @@ function parseCodes(wb, result, warnings) {
     const t = row[timeCol];
     if (code == null || family == null || !isNum(t)) continue;
     const qty = qtyCol >= 0 && isNum(row[qtyCol]) ? num(row[qtyCol]) : null;
+    const unitMinutes = unitInSeconds ? num(t) / 60 : num(t);
     codes.push({
       code: String(code).trim(),
       family: String(family).trim(),
-      unitMinutes: num(t),
+      unitMinutes,
       name: nameCol >= 0 && row[nameCol] != null ? String(row[nameCol]).trim() : "",
       defaultQty: qty && qty > 0 ? qty : null,
     });
@@ -368,19 +370,19 @@ function parseSettings(wb, result, warnings) {
         result.settings.dueAt =
           `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
       }
+    } else if (/crew/.test(k) && /factor|f\(x\)|formula|function/.test(k)) {
+      result.settings.crewFactor = String(v).trim();
+    } else if (/crew|people|workers|staff/.test(k)) {
+      const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+      if (isFinite(n) && n >= 1) result.settings.crew = Math.round(n);
     } else if (/initial|current|machine/.test(k) && /famil|state|setup|changeover/.test(k)) {
       const s = String(v).trim();
-      // explicit "None" keeps the machine running (no initial setup)
-      result.settings.initialFamily = /^(none|no setup|running|none \(.*\))$/i.test(s) ? "" : s;
+      // explicit "None" (or a Start-row reference) keeps the machine running
+      result.settings.initialFamily =
+        /^(none|no setup|running|none \(.*\))$/i.test(s) || START_ROW_NAMES.has(norm(s)) || norm(s) === "start"
+          ? ""
+          : s;
     }
-  }
-  // a settings value that names the matrix's start row resolves to "__start__"
-  if (result.settings.initialFamily) {
-    const v = norm(result.settings.initialFamily);
-    if (START_ROW_NAMES.has(v) || v === "__start__") result.settings.initialFamily = "__start__";
-  }
-  if (result.settings.initialFamily == null && result.hasStartRow) {
-    result.settings.initialFamily = "__start__";
   }
 }
 

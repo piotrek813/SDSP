@@ -93,6 +93,25 @@ if (JSON.stringify(gotOrder) !== JSON.stringify(expectedOrder)) {
   problems.push(`order sheet mismatch: ${gotOrder} vs queue ${expectedOrder}`);
 }
 
+// --- holidays import ---------------------------------------------------------
+await page.evaluate(() => {
+  const content = "# holidays\n2026-12-24;Christmas Eve\n2027-01-01;New Year 2027\n";
+  const file = new File([content], "holidays.txt", { type: "text/plain" });
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const input = document.getElementById("holidays-file");
+  input.files = dt.files;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+});
+await new Promise(r => setTimeout(r, 500));
+const holidayInfo = await page.evaluate(() => ({
+  status: document.getElementById("holidays-status").textContent,
+  items: [...document.querySelectorAll("#holidays-list li")].map((li) => li.textContent),
+}));
+console.log("holiday import:", JSON.stringify(holidayInfo));
+if (!/imported/.test(holidayInfo.status)) problems.push(`holiday import status wrong: ${holidayInfo.status}`);
+if (holidayInfo.items.length !== 2) problems.push(`holiday list wrong: ${holidayInfo.items}`);
+
 // --- branding essentials ----------------------------------------------------
 const brand = await page.evaluate(() => ({
   logoLoaded: (() => { const img = document.querySelector(".brand-logo"); return !!img && img.complete && img.naturalWidth > 0; })(),
@@ -117,7 +136,7 @@ await page.screenshot({ path: SHOT.replace(".png", "-initial.png"), fullPage: tr
 if (!stats.chips) problems.push("no sequence chips rendered");
 if (stats.chips < 7) problems.push(`sequence chips: ${stats.chips} (expected >= 7 visits + machine chip)`);
 if (stats.bars < 20) problems.push(`suspiciously few gantt rects: ${stats.bars}`);
-if (!/Held–Karp/.test(stats.solverNote)) problems.push(`solver note wrong: ${stats.solverNote}`);
+if (!/Held–Karp|matches the optimum/.test(stats.solverNote)) problems.push(`solver note wrong: ${stats.solverNote}`);
 if (stats.rows !== 18) problems.push(`catalog rows: ${stats.rows} (expected 18)`);
 
 // --- manual reorder: move a code across a family boundary -----------------
@@ -158,9 +177,10 @@ const reopt = await page.evaluate(() => ({
 console.log("after Re-optimise:", JSON.stringify(reopt));
 if (!/Held–Karp/.test(reopt.note)) problems.push(`re-optimise note wrong: ${reopt.note}`);
 if (reopt.setup !== setupOptimal) problems.push(`re-optimise did not restore optimal changeover (${reopt.setup} vs ${setupOptimal})`);
-if (reopt.firstTwo[0] !== "LB-160" || reopt.firstTwo[1] !== "LB-270") {
+if (reopt.firstTwo[0] !== "RS-190" || reopt.firstTwo[1] !== "RS-300") {
   problems.push(`queue not restored to optimal head: ${reopt.firstTwo.join(",")}`);
 }
+void pillBefore;
 
 // --- OEE change -----------------------------------------------------------
 const before = await page.$eval("#m-run", (el) => el.textContent);

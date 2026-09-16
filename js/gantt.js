@@ -183,10 +183,16 @@ export function renderGantt(container, schedule, opts = {}) {
     const a = Math.max(iv.start.getTime(), t0);
     const b = Math.min(iv.end.getTime(), t1);
     if (b <= a) continue;
-    svg.appendChild(el("rect", {
+    const band = el("rect", {
       x: x(a), y: plotTop, width: x(b) - x(a), height: plotBottom - plotTop,
       fill: "url(#failhatch)", stroke: "#ed071b", "stroke-width": 0.8,
-    }));
+    });
+    if (iv.comment) {
+      const title = document.createElementNS(GANTT_NS, "title");
+      title.textContent = `Failure: ${iv.comment}`;
+      band.appendChild(title);
+    }
+    svg.appendChild(band);
   }
 
   svg.appendChild(el("line", { x1: labelW, x2: labelW, y1: plotTop, y2: plotBottom, stroke: "#d9d9df" }));
@@ -296,9 +302,47 @@ export function renderGantt(container, schedule, opts = {}) {
     });
   }
 
+  // current-time marker: compare the plan against reality at a glance.
+  // Created once per render; app.js moves it every second via
+  // updateNowMarker() instead of rebuilding the whole chart.
+  const nowMs = Date.now();
+  const nowVisible = nowMs >= t0 && nowMs <= t1;
+  const nowX = x(Math.min(Math.max(nowMs, t0), t1));
+  const nowLine = el("line", {
+    x1: nowX, x2: nowX, y1: plotTop, y2: plotBottom,
+    stroke: "#191919", "stroke-width": 1.6,
+    display: nowVisible ? "" : "none",
+  });
+  svg.appendChild(nowLine);
+  const nowLabel = txt(svg, nowX, plotTop - 4, "now", {
+    "font-size": 9.5, fill: "#191919", "font-weight": 700,
+    "text-anchor": "middle", "paint-order": "stroke",
+    stroke: "#ffffff", "stroke-width": 3,
+    display: nowVisible ? "" : "none",
+  });
+  container._nowMarker = {
+    line: nowLine, label: nowLabel, t0, t1, labelW, plotW,
+    update() {
+      const now = Date.now();
+      const visible = now >= this.t0 && now <= this.t1;
+      const px = this.labelW + ((now - this.t0) / (this.t1 - this.t0)) * this.plotW;
+      this.line.setAttribute("x1", px);
+      this.line.setAttribute("x2", px);
+      this.label.setAttribute("x", px);
+      this.line.style.display = visible ? "" : "none";
+      this.label.style.display = visible ? "" : "none";
+    },
+  };
+
   container.appendChild(svg);
   attachTooltips(svg, schedule, colorOf, opts);
   return svg;
+}
+
+/** Move the "now" marker without rebuilding the chart. */
+export function updateNowMarker(container) {
+  const m = container && container._nowMarker;
+  if (m && m.update) m.update();
 }
 
 /* --------------------------------------------------------------- tooltip -- */

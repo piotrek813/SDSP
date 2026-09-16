@@ -45,10 +45,14 @@ test("sample workbook parses into the expected model", () => {
 
   // start row captured under the reserved key, settings resolved to it
   assert.equal(p.hasStartRow, true);
-  assert.equal(p.setup["__start__>Coating"], 40);
-  assert.equal(p.settings.initialFamily, "__start__");
+  assert.equal(p.setup["__start__>Coating"], 40);   // kept as data; no longer auto-applied
+  assert.equal(p.settings.initialFamily, "");        // "Initial family: Start" -> no setup
   assert.equal(p.settings.oee, 0.8);
   assert.equal(p.settings.startDate, "2025-01-06");
+  assert.equal(p.settings.crew, 1);
+  assert.equal(p.settings.crewFactor, "1");   // demo defines no crew impact
+  assert.equal(p.order.length, 18);                  // Order sheet preselects the queue
+  assert.equal(p.order[0].code, "RS-190");
 
   assert.equal(p.settings.direction, "forward");
   assert.equal(p.settings.dueDate, null);

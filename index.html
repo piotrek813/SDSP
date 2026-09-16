@@ -16,6 +16,11 @@
       <span class="brand-sub">Cadence — sequence planner</span>
     </div>
     <div class="topbar-actions">
+      <select id="view-select" class="view-select" title="Which view of the planner you see">
+        <option value="planner">Planner view</option>
+        <option value="production">Production view</option>
+      </select>
+      <span class="divider" aria-hidden="true"></span>
       <button id="btn-file" class="btn primary" type="button">Open workbook…</button>
       <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm" hidden />
       <button id="btn-demo" class="btn" type="button">Load demo data</button>
@@ -31,28 +36,23 @@
 
   <div id="banner" class="banner" hidden></div>
 
-  <main class="layout">
+  <main class="layout" id="view-planner">
     <!-- ------------------------------------------------- left: inputs -- -->
     <aside class="sidebar">
 
       <section class="panel">
         <h2>Workbook</h2>
         <div id="data-summary" class="data-summary" hidden></div>
-        <div class="drop-zone" id="drop-zone">
-          <p><strong>Drop an .xlsx here</strong><br />or use “Open workbook…”</p>
-          <p class="hint">Sheets: <em>Setup Matrix</em>, <em>Codes</em>,<br /><em>Shifts</em>, <em>Breaks</em>,
-            <em>Settings</em>
-          </p>
-        </div>
+
       </section>
 
-      <section class="panel">
+      <section class="panel" data-views="planner">
         <h2>Codes</h2>
         <input id="catalog-search" type="search" placeholder="Filter by code or family…" autocomplete="off" />
         <div id="catalog-list" class="catalog-list" aria-label="Available codes"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-views="planner">
         <div class="panel-head">
           <h2>Order queue</h2>
           <span class="queue-tools">
@@ -67,7 +67,7 @@
         <p id="selected-empty" class="hint" hidden>Nothing queued yet — tick codes above.</p>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-views="planner,production">
         <h2>Shift calendar</h2>
         <label class="field">Planning direction
           <select id="direction">
@@ -94,24 +94,25 @@
         </div>
 
         <div class="cal-block">
-          <div class="cal-head"><span>Breaks</span><button id="btn-add-break" class="btn tiny"
-              type="button">Add</button></div>
-          <div id="breaks-list"></div>
+          <div class="cal-head"><span>Breaks</span><button id="btn-add-break-planner"
+              class="btn tiny add-break-btn" type="button">Add</button></div>
+          <div id="breaks-list-planner" class="breaks-container"></div>
         </div>
 
         <div class="cal-block">
-          <div class="cal-head"><span>Production failures</span><button id="btn-add-failure" class="btn tiny"
-              type="button">Add</button></div>
+          <div class="cal-head"><span>Production failures</span><button id="btn-add-failure-planner"
+              class="btn tiny add-failure-btn" type="button">Add</button></div>
           <div class="cal-cols cal-cols-failure"><span>Date</span><span>Start</span><span>End</span></div>
-          <div id="failures-list"></div>
+          <div id="failures-list-planner" class="failures-container"></div>
           <p class="hint">One-off unplanned downtime — pauses production and shows red on the chart.</p>
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-views="planner,production">
         <h2>Holidays</h2>
         <label class="field">Holidays file (local or network path)
-          <input id="holidays-path" type="text" autocomplete="off" placeholder="" />
+          <input id="holidays-path" type="text" autocomplete="off"
+            placeholder="\\server\share\holidays.txt  ·  C:\plans\holidays.txt" />
         </label>
         <div class="field-row">
           <button id="btn-holidays-load" class="btn tiny" type="button">Load from path</button>
@@ -119,10 +120,41 @@
               hidden /></label>
         </div>
         <p id="holidays-status" class="hint">No holidays loaded.</p>
+        <ul id="holidays-list" class="holidays-list"></ul>
         <p class="hint">One date per line: <em>YYYY-MM-DD;Name</em> — JSON also works. Holidays pause production.</p>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-views="planner">
+        <h2>Performance (this session)</h2>
+        <div class="loss-card">
+          <span class="loss-label">Lost to poor performance</span>
+          <span id="loss-value" class="loss-value">—</span>
+          <div class="loss-bars">
+            <div class="loss-bar ideal" id="loss-bar-ideal"></div>
+            <div class="loss-bar actual" id="loss-bar-actual"></div>
+          </div>
+          <span id="loss-note" class="hint"></span>
+        </div>
+        <div class="oee-row">
+          <span class="oee-label">OEE</span>
+          <input id="oee-range" type="range" min="40" max="100" step="1" value="80" aria-label="OEE percent" />
+          <span class="oee-numwrap"><input id="oee-number" type="number" min="5" max="100" value="80" /> %</span>
+        </div>
+        <div class="oee-row">
+          <span class="oee-label">Crew</span>
+          <input id="crew-input" type="number" min="1" max="50" step="1" value="1" />
+          <span class="oee-label">Time factor f(crew)</span>
+          <input id="crew-factor-input" type="text" value="1" title="Per-piece time multiplier as a function of the crew size x — e.g. 1/x or 1.2/x + 0.3" />
+        </div>
+        <span id="crew-hint" class="hint"></span>
+        <span id="crew-hint" class="hint"></span>
+        <label class="check">
+          <input id="toggle-ideal" type="checkbox" />
+          Show the 100% OEE plan as a ghost
+        </label>
+      </section>
+
+      <section class="panel" data-views="planner">
         <h2>Machine &amp; sequence</h2>
         <label class="field">Machine starts in
           <select id="initial-family"></select>
@@ -153,50 +185,20 @@
         </div>
       </div>
 
-      <div class="results-strip">
-        <section class="panel perf-panel">
-          <h2>Performance (this session)</h2>
-          <div class="loss-card">
-            <span class="loss-label">Lost to poor performance</span>
-            <span id="loss-value" class="loss-value">—</span>
-            <div class="loss-bars">
-              <div class="loss-bar ideal" id="loss-bar-ideal"></div>
-              <div class="loss-bar actual" id="loss-bar-actual"></div>
+      <section class="panel output-panel">
+        <h2>Output</h2>
+        <div class="output-layout">
+          <div class="output-summary">
+            <span class="output-ratio"><b id="output-actual">0</b><span class="output-ratio-sep"> / </span><span
+                id="output-expected">90</span><span class="output-unit"> pc</span></span>
+            <div class="output-progress">
+              <div class="output-progress-fill" id="output-progress-fill"></div>
             </div>
-            <span id="loss-note" class="hint"></span>
+            <span class="output-sub" id="output-expected-sub"></span>
           </div>
-          <div class="oee-row">
-            <span class="oee-label">OEE</span>
-            <input id="oee-range" type="range" min="40" max="100" step="1" value="80" aria-label="OEE percent" />
-            <span class="oee-numwrap"><input id="oee-number" type="number" min="5" max="100" value="80" /> %</span>
-          </div>
-          <label class="check">
-            <input id="toggle-ideal" type="checkbox" />
-            Show the 100% OEE plan as a ghost
-          </label>
-        </section>
-
-        <section class="panel output-panel">
-          <h2>Output</h2>
-          <div class="output-grid">
-            <div class="output-cell">
-              <span class="metric-label">Expected output</span>
-              <span id="output-expected" class="output-value">—</span>
-              <span class="output-sub" id="output-expected-sub"></span>
-            </div>
-            <div class="output-cell">
-              <span class="metric-label">Parts created</span>
-              <span id="output-actual" class="output-value">0 pc</span>
-              <span class="output-sub">filled from the workbook</span>
-            </div>
-          </div>
-          <div class="output-progress">
-            <div class="output-progress-fill" id="output-progress-fill"></div>
-          </div>
-          <span id="output-note" class="hint">Supervisors fill the “Produced” column in the workbook, then use
-            Reload.</span>
-        </section>
-      </div>
+          <div class="output-breakdown" id="output-breakdown"></div>
+        </div>
+      </section>
 
       <div class="gantt-card">
         <div id="gantt-host" class="gantt-host"></div>
@@ -209,6 +211,32 @@
     </section>
   </main>
 
+  <main class="layout layout-production" id="view-production" hidden>
+    <div class="prod-grid">
+      <section class="panel">
+        <h2>Breaks</h2>
+        <div class="cal-block">
+          <div class="cal-head"><span>Planned breaks</span><button id="btn-add-break-prod" class="btn tiny add-break-btn" type="button">Add</button></div>
+          <div id="breaks-list" class="breaks-container"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Production failures</h2>
+        <div class="cal-head"><button id="btn-add-failure-prod" class="btn tiny add-failure-btn" type="button">Add
+            failure</button></div>
+        <div class="cal-cols cal-cols-failure"><span>Date</span><span>Start</span><span>End</span></div>
+        <div id="failures-list" class="failures-container"></div>
+        <p class="hint">One-off unplanned downtime — pauses production and shows red on the chart.</p>
+      </section>
+
+      <section class="panel prod-wide">
+        <h2>Quantities produced</h2>
+        <p class="hint">Enter what was actually made — saved with the workbook (Download workbook).</p>
+        <div id="prod-produced-list" class="produced-list"></div>
+      </section>
+    </div>
+  </main>
   <footer class="footnote">
     Optimal sequencing via Held–Karp dynamic programming — up to 18 families in
     interactive time (vs 10! permutations). OEE dilutes production time only —

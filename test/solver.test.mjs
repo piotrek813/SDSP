@@ -598,3 +598,30 @@ test("holidays also work with backwards planning", () => {
     }
   }
 });
+
+/* ------------------------------------------------------------ crew size -- */
+
+test("crew factor compiler: unset means no impact, formulas work", async () => {
+  const { compileCrewFactor } = await import("../js/solver-bruteforce.js");
+  assert.equal(compileCrewFactor(undefined)(2), 1);            // unset: no impact
+  assert.equal(compileCrewFactor("")(3), 1);
+  assert.equal(compileCrewFactor("1")(2), 1);                  // explicit no-impact
+  assert.equal(compileCrewFactor("1/x")(4), 0.25);             // defined: scales
+  assert.equal(compileCrewFactor("0.85")(3), 0.85);            // constant multiplier
+  assert.equal(compileCrewFactor(0.9)(3), 0.9);                // numeric form
+  assert.ok(Math.abs(compileCrewFactor("1.2/x + 0.3")(2) - 0.9) < 1e-9); // formula
+  assert.equal(compileCrewFactor("(1 + 0.2)/x")(5), 0.24);
+  assert.throws(() => compileCrewFactor("import os"));         // no funny business
+});
+
+test("crew size scales production time but not changeovers", () => {
+  const base = twoShiftCtx();
+  const solo = buildSchedule({ ...base, calendar: { ...base.calendar, crew: 1 } }, ["A", "B"]);
+  const duo = buildSchedule({ ...base, calendar: { ...base.calendar, crew: 2, crewFactor: "1/x" } }, ["A", "B"]);
+
+  // run time halves, setup time is untouched
+  assert.ok(Math.abs(duo.runMinutes - solo.runMinutes / 2) < 1e-6);
+  assert.ok(Math.abs(duo.setupMinutes - solo.setupMinutes) < 1e-6);
+  // and the whole plan finishes earlier
+  assert.ok(duo.end < solo.end);
+});

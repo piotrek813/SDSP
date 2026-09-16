@@ -114,6 +114,81 @@ export function sequenceSetupMinutes(ctx, sequence) {
   return total;
 }
 
+/**
+ * Compile a crew-time factor into f(x): how the per-piece time scales with
+ * the number of people working. Accepts either a plain multiplier
+ * ("0.85" — constant for any crew size) or a formula in x, e.g. "1/x",
+ * "1.2/x + 0.3". Unset means NO time impact: f(x) = 1 — the crew size alone
+ * must never silently change the plan.
+ * Parsed with a tiny recursive-descent parser — no eval.
+ */
+export function compileCrewFactor(spec) {
+  if (spec == null || spec === "" || spec === 1) return () => 1;
+  if (typeof spec === "number") {
+    if (!isFinite(spec) || spec <= 0) return () => 1;
+    return () => spec;
+  }
+  const clean = String(spec).trim().toLowerCase().replace(/\s+/g, "");
+  if (/^\d+(?:\.\d+)?$/.test(clean)) {
+    const m = parseFloat(clean);
+    return () => m;
+  }
+  const tokens = clean.match(/x|\d+(?:\.\d+)?|[+\-*/()]/g);
+  if (!tokens || tokens.join("") !== clean) {
+    throw new Error(`Cannot parse crew factor "${spec}"`);
+  }
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const next = () => tokens[pos++];
+
+  function expr() {
+    let fn = term();
+    while (peek() === "+" || peek() === "-") {
+      const op = next();
+      const rhs = term();
+      const left = fn;   // capture: fn gets reassigned below
+      fn = op === "+" ? (x) => left(x) + rhs(x) : (x) => left(x) - rhs(x);
+    }
+    return fn;
+  }
+  function term() {
+    let fn = factor();
+    while (peek() === "*" || peek() === "/") {
+      const op = next();
+      const rhs = factor();
+      const left = fn;
+      fn = op === "*" ? (x) => left(x) * rhs(x) : (x) => left(x) / rhs(x);
+    }
+    return fn;
+  }
+  function factor() {
+    const t = next();
+    if (t === "x") return (x) => x;
+    if (t === "(") {
+      const inner = expr();
+      if (next() !== ")") throw new Error(`Cannot parse crew factor "${spec}"`);
+      return inner;
+    }
+    if (t === "-") {
+      const inner = factor();
+      return (x) => -inner(x);
+    }
+    if (t === "+") return factor();
+    if (/^\d/.test(t)) {
+      const n = parseFloat(t);
+      return () => n;
+    }
+    throw new Error(`Cannot parse crew factor "${spec}"`);
+  }
+
+  const fn = expr();
+  if (pos !== tokens.length) throw new Error(`Cannot parse crew factor "${spec}"`);
+  return (x) => {
+    const v = fn(Number(x) || 1);
+    return isFinite(v) && v > 0 ? v : 1 / (Number(x) || 1); // sane fallback
+  };
+}
+
 /** Ideal production minutes for the whole plan (OEE-independent). */
 export function idealRunMinutes(codes) {
   return (codes || []).reduce((s, c) => s + (c.qty * c.unitMinutes || 0), 0);
@@ -376,6 +451,8 @@ function forwardScheduleFromVisits(ctx, visits) {
   const calendar = ctx.calendar || {};
   const oee = normalizeOee(ctx.oee);
   const maxDays = calendar.maxDays || 400;
+  const crew = Math.max(1, Math.round(Number(calendar.crew) || 1));
+  const crewF = compileCrewFactor(calendar.crewFactor);
 
   let intervals = expandWorkIntervals(calendar, Math.min(maxDays, 60));
 
@@ -427,14 +504,15 @@ function forwardScheduleFromVisits(ctx, visits) {
 
     visit.codes.forEach((c, idx) => {
       const runSegments = [];
-      const minutes = (c.qty || 0) * effectiveUnitMinutes(c.unitMinutes, oee);
+      const unitEffective = effectiveUnitMinutes(c.unitMinutes, oee) * crewF(crew);
+      const minutes = (c.qty || 0) * unitEffective;
       if (minutes > 0) take(minutes, runSegments);
       rows.push({
         code: c.code,
         family: fam,
         qty: c.qty,
         unitIdeal: c.unitMinutes,
-        unitEffective: effectiveUnitMinutes(c.unitMinutes, oee),
+        unitEffective,
         setupFrom: prevFamily,
         setupSegments: idx === 0 ? setupSegments : [],
         runSegments,
@@ -449,6 +527,8 @@ function forwardScheduleFromVisits(ctx, visits) {
 function backwardScheduleFromVisits(ctx, visits) {
   const calendar = ctx.calendar || {};
   const oee = normalizeOee(ctx.oee);
+  const crew = Math.max(1, Math.round(Number(calendar.crew) || 1));
+  const crewF = compileCrewFactor(calendar.crewFactor);
   if (!calendar.dueDate) throw new Error("Backward planning needs a due date.");
 
   const dueBase = new Date(calendar.dueDate + "T00:00:00");
@@ -508,7 +588,7 @@ function backwardScheduleFromVisits(ctx, visits) {
     const visit = visits[i];
     for (const c of visit.codes.slice().reverse()) {
       const runSegments = [];
-      const minutes = (c.qty || 0) * effectiveUnitMinutes(c.unitMinutes, oee);
+      const minutes = (c.qty || 0) * effectiveUnitMinutes(c.unitMinutes, oee) * crewF(crew);
       if (minutes > 0) takeBack(minutes, runSegments);
       placements.set(c, runSegments);
     }
@@ -528,12 +608,13 @@ function backwardScheduleFromVisits(ctx, visits) {
   for (const visit of visits) {
     const setupSegments = (setupByVisit.get(visit) || []).slice().reverse();
     visit.codes.forEach((c, idx) => {
+      const unitEffective = effectiveUnitMinutes(c.unitMinutes, oee) * crewF(crew);
       rows.push({
         code: c.code,
         family: visit.family,
         qty: c.qty,
         unitIdeal: c.unitMinutes,
-        unitEffective: effectiveUnitMinutes(c.unitMinutes, oee),
+        unitEffective,
         setupFrom: prevFamily,
         setupSegments: idx === 0 ? setupSegments : [],
         runSegments: (placements.get(c) || []).slice().reverse(),

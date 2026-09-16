@@ -21,10 +21,10 @@ var (
 	settingsCfg = Settings{}
 )
 
-func registerAPI(root string) {
+func registerAPI(mux *http.ServeMux, root string) {
 	settingsCfg = loadSettings(root)
 
-	http.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			writeJSON(w, map[string]any{"holidaysPath": settingsCfg.HolidaysPath})
@@ -45,13 +45,13 @@ func registerAPI(root string) {
 				writeJSON(w, map[string]any{"path": path, "count": 0, "holidays": []Holiday{}, "error": "could not save settings: " + err.Error()})
 				return
 			}
-			writeJSON(w, holidaysPayload(root, path))
+			writeJSON(w, holidaysPayloadWithCache(root, path))
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
 
-	http.HandleFunc("/api/holidays", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/holidays", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			var body struct {
 				HolidaysPath string `json:"holidaysPath"`
@@ -62,31 +62,81 @@ func registerAPI(root string) {
 				_ = saveSettings(root, settingsCfg)
 				path := settingsCfg.HolidaysPath
 				settingsMu.Unlock()
-				writeJSON(w, holidaysPayload(root, path))
+				writeJSON(w, holidaysPayloadWithCache(root, path))
 				return
 			}
 		}
 		settingsMu.Lock()
 		path := settingsCfg.HolidaysPath
 		settingsMu.Unlock()
-		writeJSON(w, holidaysPayload(root, path))
+		writeJSON(w, holidaysPayloadWithCache(root, path))
+	})
+
+	// browser-side "Import file…": the parsed holidays are pushed here so
+	// they survive restarts even without a shared path
+	mux.HandleFunc("/api/holidays/import", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			Holidays []Holiday `json:"holidays"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		holidays := normalizeHolidays(body.Holidays)
+		settingsMu.Lock()
+		settingsCfg.Holidays = holidays
+		settingsCfg.HolidaysPath = "" // imported data becomes the source
+		saveErr := saveSettings(root, settingsCfg)
+		settingsMu.Unlock()
+		resp := map[string]any{"path": "", "count": len(holidays), "holidays": holidays, "error": "", "saved": saveErr == nil}
+		if saveErr != nil {
+			resp["error"] = "could not save settings: " + saveErr.Error()
+		}
+		writeJSON(w, resp)
 	})
 }
 
-// holidaysPayload reads the configured file fresh on every call, so edits made
-// on a network share flow in without restarting the planner.
-func holidaysPayload(root, path string) map[string]any {
+// holidaysPayloadWithCache reads the configured file fresh on every call, so
+// edits made on a network share flow in without restarting the planner. When
+// the file cannot be read or parsed, the last known good holidays from the
+// settings are returned instead of nothing.
+func holidaysPayloadWithCache(root, path string) map[string]any {
+	settingsMu.Lock()
+	cached := settingsCfg.Holidays
+	settingsMu.Unlock()
+
 	if path == "" {
+		if len(cached) > 0 {
+			return map[string]any{"path": "", "count": len(cached), "holidays": cached, "error": "", "source": "saved"}
+		}
 		return map[string]any{"path": "", "count": 0, "holidays": []Holiday{}, "error": "no holidays file configured"}
 	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if len(cached) > 0 {
+			return map[string]any{"path": path, "count": len(cached), "holidays": cached,
+				"error": "cannot read file: " + err.Error() + " — showing the last known holidays"}
+		}
 		return map[string]any{"path": path, "count": 0, "holidays": []Holiday{}, "error": "cannot read file: " + err.Error()}
 	}
 	holidays, err := parseHolidays(data)
 	if err != nil {
+		if len(cached) > 0 {
+			return map[string]any{"path": path, "count": len(cached), "holidays": cached,
+				"error": err.Error() + " — showing the last known holidays"}
+		}
 		return map[string]any{"path": path, "count": 0, "holidays": []Holiday{}, "error": err.Error()}
 	}
+
+	settingsMu.Lock()
+	settingsCfg.Holidays = holidays
+	_ = saveSettings(root, settingsCfg)
+	settingsMu.Unlock()
 	return map[string]any{"path": path, "count": len(holidays), "holidays": holidays, "error": ""}
 }
 

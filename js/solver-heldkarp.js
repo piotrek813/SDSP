@@ -60,61 +60,80 @@ export function solveHeldKarp(ctx, opts = {}) {
     }
   }
 
-  // the state the DP starts from: a pinned family, or the machine's own state
-  const fromState = pinned || ctx.initialFamily || null;
-  // cost of entering each family from that starting state
-  const enterFrom = pinned ? setupBetween(ctx, ctx.initialFamily || null, pinned) : 0;
+
 
   const size = 1 << rest.length;
-  const cost = Array.from({ length: rest.length }, () => new Float64Array(size).fill(Infinity));
-  const parent = Array.from({ length: rest.length }, () => new Int16Array(size).fill(-1));
+  // startCost[j][mask] = min changeover cost of a path that STARTS at
+  // rest[j] and visits exactly the families in mask (j included). Built by
+  // removing the first hop: startCost[j][mask] =
+  //   min over t in mask\{j} of ( m[j][t] + startCost[t][mask \ {j}] ).
+  // completion[j][mask] = min changeover cost of a path that starts at
+  // rest[j], visits exactly the families in mask (j included) and ends
+  // anywhere. Recurrence removes the FIRST hop:
+  //   completion[j][mask] = min over t in mask\{j} of ( m[j][t] + completion[t][mask\{t}] )
+  const popcount = (x) => { let c = 0; while (x) { x &= x - 1; c++; } return c; };
+  const completion = Array.from({ length: rest.length }, () => new Float64Array(size).fill(Infinity));
 
-  for (let k = 0; k < rest.length; k++) {
-    cost[k][1 << k] = setupBetween(ctx, fromState, rest[k]);
-  }
+  for (let k = 0; k < rest.length; k++) completion[k][1 << k] = 0;
 
   let evaluated = 0;
-  for (let mask = 1; mask < size; mask++) {
-    for (let k = 0; k < rest.length; k++) {
-      const cur = cost[k][mask];
-      if (cur === Infinity) continue;
-      evaluated++;
-      const base = k * rest.length;
-      for (let j = 0; j < rest.length; j++) {
-        if (mask & (1 << j)) continue;
-        const nm = mask | (1 << j);
-        const cand = cur + m[base + j];
-        if (cand < cost[j][nm]) {
-          cost[j][nm] = cand;
-          parent[j][nm] = k;
-        }
+  const maskOrder = [];
+  for (let mask = 1; mask < size; mask++) maskOrder.push(mask);
+  maskOrder.sort((a, b) => popcount(a) - popcount(b));
+  for (const mask of maskOrder) {
+    if (popcount(mask) < 2) continue;
+    for (let j = 0; j < rest.length; j++) {
+      if (!(mask & (1 << j))) continue;
+      let best = Infinity;
+      for (let t = 0; t < rest.length; t++) {
+        if (t === j || !(mask & (1 << t))) continue;
+        const sub = completion[t][mask & ~(1 << j)];
+        if (sub === Infinity) continue;
+        evaluated++;
+        const cand = m[j * rest.length + t] + sub;
+        if (cand < best) best = cand;
       }
+      completion[j][mask] = best;
     }
   }
 
   const full = size - 1;
-  let endK = -1;
-  let best = Infinity;
-  for (let k = 0; k < rest.length; k++) {
-    if (cost[k][full] < best) { best = cost[k][full]; endK = k; }
-  }
 
-  // walk the parent pointers backwards to rebuild the order
-  const tail = [];
-  let mask = full, k = endK;
-  while (k >= 0) {
-    tail.push(rest[k]);
-    const p = parent[k][mask];
-    mask &= ~(1 << k);
-    k = p;
+  // Deterministic reconstruction: walk the sequence from the start, at each
+  // step choosing the family whose entry cost + exact optimal completion is
+  // smallest (ties broken by family name). Exact lookahead makes the greedy
+  // walk optimal, and name tie-breaking makes it stable regardless of the
+  // order families happen to be enumerated in.
+  const sequence = [];
+  let remaining = full;
+  let cur = -1; // -1 = the machine's starting state
+  for (let step = 0; step < rest.length; step++) {
+    let pick = -1, pickCost = Infinity;
+    for (let j = 0; j < rest.length; j++) {
+      if (!(remaining & (1 << j))) continue;
+      // first greedy step enters from the machine state (or the pinned family)
+      const enter = cur === -1
+        ? setupBetween(ctx, pinned || ctx.initialFamily || null, rest[j])
+        : m[cur * rest.length + j];
+      if (enter === Infinity) continue;
+      const total = enter + completion[j][remaining];
+      if (total < pickCost - 1e-9 || (Math.abs(total - pickCost) <= 1e-9 && (pick === -1 || rest[j] < rest[pick]))) {
+        pick = j; pickCost = total;
+      }
+    }
+    if (pick === -1) throw new Error("Held–Karp reconstruction failed — please report this plan.");
+    sequence.push(rest[pick]);
+    remaining &= ~(1 << pick);
+    cur = pick;
   }
-  tail.reverse();
-
-  const sequence = pinned ? [pinned, ...tail] : tail;
-  const setupMinutes = (pinned ? enterFrom : 0) + best;
+  const fullSequence = pinned ? [pinned, ...sequence] : sequence;
+  const setupMinutes = fullSequence.reduce(
+    (sum, fam, i) => sum + setupBetween(ctx, i === 0 ? (ctx.initialFamily || null) : fullSequence[i - 1], fam),
+    0
+  );
 
   return {
-    sequence,
+    sequence: fullSequence,
     setupMinutes,
     runMinutes: idealRunMinutes(codes),
     evaluated,

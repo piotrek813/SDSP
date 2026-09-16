@@ -36,4 +36,4 @@ go build \
 echo
 echo "Build successful: sdsp.exe"
 
-mv sdsp.exe Candance.exe
+mv sdsp.exe ../Candance.exe

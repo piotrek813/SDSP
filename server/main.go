@@ -34,8 +34,9 @@ func main() {
 	}
 
 	root := appRoot()
-	http.Handle("/", http.FileServer(http.Dir(root)))
-	registerAPI(root)
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.Dir(root)))
+	registerAPI(mux, root)
 
 	url := "http://127.0.0.1:" + p
 	ln, err := net.Listen("tcp", "127.0.0.1:"+p)
@@ -48,7 +49,7 @@ func main() {
 		return
 	}
 
-	srv := &http.Server{}
+	srv := &http.Server{Handler: mux}
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 			logf("server stopped: %v", err)

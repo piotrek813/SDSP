@@ -13,8 +13,9 @@ import {
   setupBetween,
 } from "./solver-bruteforce.js";
 import { solveHeldKarp } from "./solver-heldkarp.js";
+import { compileCrewFactor } from "./solver-bruteforce.js";
 import * as excelParser from "./excel.js";
-import { renderGantt, downloadSVGFile, downloadPNGFile, fmtDur } from "./gantt.js";
+import { renderGantt, updateNowMarker, downloadSVGFile, downloadPNGFile, fmtDur } from "./gantt.js";
 
 excelParser.init(window.XLSX);
 
@@ -54,6 +55,8 @@ const state = {
   failures: [],            // one-off production failures {date, start, end}
   holidays: [],            // full non-working days [{date, name}] from a file
   holidaysPath: "",        // where that file lives (persisted by the Go server)
+  crew: 1,                 // people working — affects per-piece run time
+  crewFactor: "1",         // f(crew): "" or "1" = no time impact; e.g. "1/x"
   initialFamily: "",       // "" = none, "__start__" = matrix start row, else family
   fixedFirst: "",          // "" = free optimisation, else family name
   showIdeal: false,
@@ -65,7 +68,7 @@ const $ = (id) => document.getElementById(id);
 const els = {};
 [
   "file-input", "btn-file", "btn-demo", "btn-svg", "btn-png", "btn-export-book", "btn-reload",
-  "holidays-path", "btn-holidays-load", "holidays-file", "holidays-status",
+  "holidays-path", "btn-holidays-load", "holidays-file", "holidays-status", "holidays-list",
   "data-summary", "catalog-search", "catalog-list", "selected-list", "selected-empty",
   "oee-range", "oee-number", "loss-value", "loss-note", "loss-bar-ideal", "loss-bar-actual",
   "start-date", "start-time", "direction", "due-date", "due-time",
@@ -73,7 +76,8 @@ const els = {};
   "initial-family", "fixed-first", "toggle-ideal",
   "seq-chips", "solver-note", "gantt-host", "gantt-empty", "legend",
   "m-finish", "m-makespan", "m-setup", "m-run",
-  "output-expected", "output-actual", "output-progress-fill", "output-note", "output-expected-sub",
+  "output-expected", "output-actual", "output-progress-fill", "output-expected-sub",
+  "output-breakdown", "crew-input", "crew-factor-input", "view-select",
   "banner", "queue-pill", "btn-reoptimise",
 ].forEach((id) => { els[id] = $(id); });
 
@@ -174,16 +178,6 @@ els["file-input"].addEventListener("change", (e) => {
   if (file) { state.file = file; state.fileHandle = null; state.isDemo = false; readWorkbook(file).catch(showLoadError); }
 });
 
-const dropZone = document.querySelector(".drop-zone");
-["dragover", "dragenter"].forEach((ev) =>
-  dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("dragging"); }));
-["dragleave", "drop"].forEach((ev) =>
-  dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("dragging"); }));
-dropZone.addEventListener("drop", (e) => {
-  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if (file) { state.file = file; state.fileHandle = null; state.isDemo = false; readWorkbook(file).catch(showLoadError); }
-});
-
 async function readWorkbook(file) {
   const buf = new Uint8Array(await file.arrayBuffer());
   const parsed = excelParser.parseWorkbookFromBuffer(buf);
@@ -275,7 +269,10 @@ function applyParsedReloaded(parsed, fileName) {
   state.startDate = defaultStartDate(parsed.settings.startDate);
   state.shifts = (parsed.shifts || []).map((s) => ({ ...s }));
   state.breaks = (parsed.breaks || []).map((s) => ({ ...s }));
-  state.initialFamily = parsed.settings.initialFamily || "";
+  state.initialFamily =
+    parsed.settings.initialFamily && parsed.settings.initialFamily !== "__start__"
+      ? parsed.settings.initialFamily
+      : "";
   state.direction = parsed.settings.direction === "backward" ? "backward" : "forward";
   state.dueDate = parsed.settings.dueDate || null;
   state.dueAt = parsed.settings.dueAt || "";
@@ -315,15 +312,19 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
   state.breaks = (parsed.breaks || []).map((s) => ({ ...s }));
   state.failures = (parsed.failures || []).map((s) => ({ ...s }));
   state.holidays = [];           // replaced when the holidays file loads
-  state.initialFamily = parsed.settings.initialFamily || "";
+  state.initialFamily =
+    parsed.settings.initialFamily && parsed.settings.initialFamily !== "__start__"
+      ? parsed.settings.initialFamily
+      : "";
   state.fixedFirst = "";
+  state.crew = parsed.settings.crew || 1;
+  state.crewFactor = parsed.settings.crewFactor || "1";
   state.direction = parsed.settings.direction === "backward" ? "backward" : "forward";
   state.dueDate = parsed.settings.dueDate || null;
   state.dueAt = parsed.settings.dueAt || "";
 
-  // An Order sheet (from "Download workbook") restores the exact queue —
-  // order and quantities — and starts in manual mode so the plan is what
-  // was saved. Otherwise start with everything selected.
+  // The queue comes from the workbook's Order sheet. No sheet (or no rows)
+  // means an empty queue — the planner ticks codes deliberately.
   if (parsed.order && parsed.order.length) {
     state.mode = "manual";
     state.selected = parsed.order
@@ -338,14 +339,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
       .filter(Boolean);
   } else {
     state.mode = "optimal";
-    state.selected = state.catalog.map((c) => ({
-      code: c.code,
-      family: c.family,
-      unitMinutes: c.unitMinutes,
-      name: c.name,
-      qty: c.defaultQty || 5,
-      produced: 0,
-    }));
+    state.selected = [];
   }
 
   hideBanner();
@@ -358,6 +352,8 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
   renderHolidays();
   // Reload only makes sense for a workbook on disk (the demo is refetched)
   els["btn-reload"].disabled = !state.file || state.isDemo;
+  els["crew-input"].value = state.crew;
+  els["crew-factor-input"].value = state.crewFactor;
   recompute();
 }
 
@@ -451,14 +447,22 @@ function setManual() {
   scheduleRecompute();
 }
 
+let selectedDomSig = null;
+
 function renderSelected() {
+  const sig = state.selected.map((s) => s.code).join("|") + `#${state.initialFamily || ""}`;
+  if (sig === selectedDomSig && document.querySelectorAll("#selected-list li").length === state.selected.length) {
+    return; // order unchanged — keep the DOM (and any input focus)
+  }
+  selectedDomSig = sig;
   const list = els["selected-list"];
   list.textContent = "";
   els["selected-empty"].hidden = state.selected.length > 0;
 
   const setupOf = state.parsed ? state.parsed.setup : {};
-  let prevFam = state.initialFamily === "__start__" ? "__start__" : state.initialFamily || null;
+  let prevFam = state.initialFamily || null;
 
+  if (window.__debugQueue) window.__debugQueue(state.selected.map((x) => x.code).join(","));
   state.selected.forEach((s, i) => {
     const li = document.createElement("li");
     li.className = "queue-row";
@@ -614,65 +618,119 @@ function renderCalendarEditors() {
   shifts.textContent = "";
   state.shifts.forEach((s) => shifts.appendChild(mkRow(s, "shift", true)));
 
-  const breaks = els["breaks-list"];
-  breaks.textContent = "";
-  state.breaks.forEach((b) => breaks.appendChild(mkRow(b, "break", true)));
-  if (!state.breaks.length) {
-    const none = document.createElement("p");
-    none.className = "cal-none";
-    none.textContent = "No breaks defined.";
-    breaks.appendChild(none);
-  }
+  // breaks and failures are editable from BOTH views (planner + production)
+  renderBreakRows();
+  renderFailRows();
+}
 
-  // failure windows: one-off, with a date (unplanned downtime)
-  const failures = els["failures-list"];
-  failures.textContent = "";
-  state.failures.forEach((f) => {
+function renderBreakRows() {
+  const mkRow = (item) => {
     const row = document.createElement("div");
-    row.className = "cal-row failure";
-
-    const date = document.createElement("input");
-    date.type = "text";
-    date.className = "date-input";
-    date.placeholder = "dd/mm/yyyy";
-    date.inputMode = "numeric";
-    date.autocomplete = "off";
-    date.title = "Failure date";
-    bindDateInput(date, () => f.date || state.startDate, (iso) => { f.date = iso; });
+    row.className = "cal-row";
 
     const start = document.createElement("input");
-    start.type = "time"; start.value = minutesToHMInput(f.start);
-    start.title = "Failure start";
+    start.type = "time"; start.value = minutesToHMInput(item.start);
+    start.title = "Break start";
     start.addEventListener("change", () => {
       const v = hmToMinutes(start.value);
-      if (v != null) { f.start = v; scheduleRecompute(); }
+      if (v != null) { item.start = v; scheduleRecompute(); }
     });
 
     const end = document.createElement("input");
-    end.type = "time"; end.value = minutesToHMInput(f.end);
-    end.title = "Failure end";
+    end.type = "time"; end.value = minutesToHMInput(item.end);
+    end.title = "Break end";
     end.addEventListener("change", () => {
       const v = hmToMinutes(end.value);
-      if (v != null) { f.end = v; scheduleRecompute(); }
+      if (v != null) { item.end = v; scheduleRecompute(); }
     });
+
+    row.append(start, end);
 
     const rm = document.createElement("button");
     rm.className = "icon-btn subtle"; rm.textContent = "×"; rm.title = "Remove";
     rm.addEventListener("click", () => {
-      const idx = state.failures.indexOf(f);
-      if (idx >= 0) state.failures.splice(idx, 1);
+      const idx = state.breaks.indexOf(item);
+      if (idx >= 0) state.breaks.splice(idx, 1);
       renderCalendarEditors();
       scheduleRecompute();
     });
+    row.appendChild(rm);
+    return row;
+  };
 
-    row.append(date, start, end, rm);
-    failures.appendChild(row);
-  });
-  if (!state.failures.length) {
-    const none = document.createElement("p");
-    none.className = "cal-none";
-    none.textContent = "No failures recorded.";
-    failures.appendChild(none);
+  for (const list of document.querySelectorAll(".breaks-container")) {
+    list.textContent = "";
+    state.breaks.forEach((b) => list.appendChild(mkRow(b)));
+    if (!state.breaks.length) {
+      const none = document.createElement("p");
+      none.className = "cal-none";
+      none.textContent = "No breaks defined.";
+      list.appendChild(none);
+    }
+  }
+}
+
+function renderFailRows() {
+  for (const list of document.querySelectorAll(".failures-container")) {
+    list.textContent = "";
+    state.failures.forEach((f) => {
+      const row = document.createElement("div");
+      row.className = "cal-row failure";
+
+      const date = document.createElement("input");
+      date.type = "text";
+      date.className = "date-input";
+      date.placeholder = "dd/mm/yyyy";
+      date.inputMode = "numeric";
+      date.autocomplete = "off";
+      date.title = "Failure date";
+      bindDateInput(date, () => f.date || state.startDate, (iso) => { f.date = iso; });
+
+      const start = document.createElement("input");
+      start.type = "time"; start.value = minutesToHMInput(f.start);
+      start.title = "Failure start";
+      start.addEventListener("change", () => {
+        const v = hmToMinutes(start.value);
+        if (v != null) { f.start = v; scheduleRecompute(); }
+      });
+
+      const end = document.createElement("input");
+      end.type = "time"; end.value = minutesToHMInput(f.end);
+      end.title = "Failure end";
+      end.addEventListener("change", () => {
+        const v = hmToMinutes(end.value);
+        if (v != null) { f.end = v; scheduleRecompute(); }
+      });
+
+      const comment = document.createElement("input");
+      comment.type = "text";
+      comment.className = "comment-input";
+      comment.value = f.comment || "";
+      comment.placeholder = "what broke?";
+      comment.title = "Failure comment";
+      comment.addEventListener("change", () => {
+        f.comment = comment.value.trim();
+        scheduleRecompute();
+      });
+
+      const rm = document.createElement("button");
+      rm.className = "icon-btn subtle"; rm.textContent = "×"; rm.title = "Remove";
+      rm.addEventListener("click", () => {
+        const idx = state.failures.indexOf(f);
+        if (idx >= 0) state.failures.splice(idx, 1);
+        renderCalendarEditors();
+        scheduleRecompute();
+      });
+
+      row.append(date, start, end, comment, rm);
+      list.appendChild(row);
+    });
+    if (!state.failures.length) {
+      const none = document.createElement("p");
+      none.className = "cal-none";
+      none.textContent = "No failures recorded.";
+      list.appendChild(none);
+    }
   }
 }
 
@@ -681,20 +739,22 @@ els["btn-add-shift"].addEventListener("click", () => {
   renderCalendarEditors();
   scheduleRecompute();
 });
-els["btn-add-break"].addEventListener("click", () => {
-  state.breaks.push({ name: "Break", start: 720, end: 750 });
-  renderCalendarEditors();
-  scheduleRecompute();
-});
-els["btn-add-failure"].addEventListener("click", () => {
-  state.failures.push({
-    date: state.startDate || todayStr(),
-    start: 540,   // 09:00
-    end: 660,     // 11:00 — a plausible 2 h breakdown
-  });
-  renderCalendarEditors();
-  scheduleRecompute();
-});
+document.querySelectorAll(".add-break-btn").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    state.breaks.push({ name: "Break", start: 720, end: 750 });
+    renderCalendarEditors();
+    scheduleRecompute();
+  }));
+document.querySelectorAll(".add-failure-btn").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    state.failures.push({
+      date: state.startDate || todayStr(),
+      start: 540,   // 09:00
+      end: 660,     // 11:00 — a plausible 2 h breakdown
+    });
+    renderCalendarEditors();
+    scheduleRecompute();
+  }));
 els["start-time"].addEventListener("change", () => {
   state.startAt = els["start-time"].value || "";
   scheduleRecompute();
@@ -726,6 +786,13 @@ async function initHolidays() {
     state.serverApi = true;
     const data = await res.json();
     applyHolidays(data, { quiet: true });
+    if (data.error) {
+      renderHolidays(data.error, "error");
+    } else if (data.count) {
+      renderHolidays(`${data.count} holiday(s) loaded${data.path ? ` from ${data.path}` : " (saved holidays)"}.`, "ok");
+    } else {
+      renderHolidays("No holidays file configured.");
+    }
   } catch {
     state.serverApi = false;
     renderHolidays("Holiday file loading needs the desktop server (sdsp.exe) — or import a file below.");
@@ -757,6 +824,9 @@ async function loadHolidaysFromPath() {
     });
     const data = await res.json();
     applyHolidays(data);
+    if (!data.error) {
+      renderHolidays(`${data.count} holiday(s) loaded from ${path} and saved — they will load automatically next time.`, "ok");
+    }
   } catch (err) {
     renderHolidays(`Could not reach the planner server: ${err.message}`, "error");
   }
@@ -782,12 +852,37 @@ function parseHolidayText(text) {
 
 function importHolidaysFile(file) {
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     const holidays = parseHolidayText(String(reader.result));
     if (!holidays.length) { renderHolidays(`No usable holiday lines found in ${file.name}.`, "error"); return; }
+
+    // push to the planner server so the import survives restarts
+    if (holidaysApiAvailable()) {
+      try {
+        const res = await fetch("/api/holidays/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ holidays }),
+        });
+        const data = await res.json();
+        applyHolidays(data);
+        renderHolidays(
+          data.error
+            ? `${data.error}`
+            : `${holidays.length} holiday(s) imported from ${file.name} and saved — they will load automatically next time.`,
+          data.error ? "error" : "ok"
+        );
+        return;
+      } catch (err) {
+        renderHolidays(`Could not reach the planner server: ${err.message}`, "error");
+        return;
+      }
+    }
+
+    // no server API: session-only
     state.holidaysPath = "";
     state.holidays = holidays;
-    renderHolidays(`${holidays.length} holiday(s) imported from ${file.name}.`, "ok");
+    renderHolidays(`${holidays.length} holiday(s) imported from ${file.name} (session only — start the planner via sdsp.exe to save them).`, "ok");
     scheduleRecompute();
   };
   reader.onerror = () => renderHolidays(`Could not read ${file.name}.`, "error");
@@ -799,6 +894,22 @@ function renderHolidays(message, kind) {
   status.textContent = message || "";
   status.classList.toggle("ok", kind === "ok");
   status.classList.toggle("error", kind === "error");
+
+  const list = els["holidays-list"];
+  list.textContent = "";
+  const sorted = state.holidays.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const shown = sorted.slice(0, 40);
+  for (const h of shown) {
+    const li = document.createElement("li");
+    li.textContent = plDate.fromISO(h.date) + (h.name ? ` — ${h.name}` : "");
+    list.appendChild(li);
+  }
+  if (sorted.length > shown.length) {
+    const li = document.createElement("li");
+    li.className = "cal-none";
+    li.textContent = `…and ${sorted.length - shown.length} more`;
+    list.appendChild(li);
+  }
 }
 
 els["btn-holidays-load"].addEventListener("click", () => loadHolidaysFromPath());
@@ -828,6 +939,25 @@ function onOeeChange(evt) {
   scheduleRecompute();
 }
 
+els["crew-input"].addEventListener("change", () => {
+  const n = Math.max(1, Math.min(50, Math.round(+els["crew-input"].value || 1)));
+  els["crew-input"].value = n;
+  state.crew = n;
+  scheduleRecompute();
+});
+
+els["crew-factor-input"].addEventListener("change", () => {
+  const spec = els["crew-factor-input"].value.trim() || "1";
+  try {
+    compileCrewFactor(spec);            // validate before accepting
+    state.crewFactor = spec;
+    scheduleRecompute();
+  } catch (err) {
+    els["crew-factor-input"].value = state.crewFactor;
+    banner(`Cannot parse crew factor "${spec}" — use a number or a formula in x, e.g. 1/x.`, true);
+  }
+});
+
 els["toggle-ideal"].addEventListener("change", () => {
   state.showIdeal = els["toggle-ideal"].checked;
   scheduleRecompute();
@@ -841,11 +971,6 @@ function renderSolverOptions() {
   const optNone = document.createElement("option");
   optNone.value = ""; optNone.textContent = "No setup (machine running)";
   sel.appendChild(optNone);
-  if (state.parsed && state.parsed.hasStartRow) {
-    const o = document.createElement("option");
-    o.value = "__start__"; o.textContent = "“Start” row from matrix";
-    sel.appendChild(o);
-  }
   for (const f of state.parsed ? state.parsed.families : []) {
     const o = document.createElement("option");
     o.value = f; o.textContent = f;
@@ -899,6 +1024,8 @@ function buildCtx() {
       breaks: state.breaks,
       failures: state.failures,
       holidays: state.holidays,
+      crew: state.crew,
+      crewFactor: state.crewFactor,
       maxDays: 400,
     },
     codes: state.selected.map((s) => ({
@@ -969,11 +1096,13 @@ function recompute() {
   // Manual mode never touches the user's order.
   if (state.mode === "optimal" && opt) {
     const wanted = queueFromSequence(opt.sequence);
+    if (window.__sdspDebug) window.__sdspDebug({ tag: "optimal-branch", seq: opt.sequence, wanted: wanted.map((x) => x.code), same: sameOrder(state.selected, wanted) });
     if (!sameOrder(state.selected, wanted)) {
       state.selected = wanted;
       renderSelected();
     }
   }
+  if (window.__sdspDebug) window.__sdspDebug({ tag: "build", queue: state.selected.map((x) => x.code), setup: null });
 
   let sched, idealSched;
   try {
@@ -991,6 +1120,7 @@ function recompute() {
   renderQueueStatus();
   renderMetrics(sched, idealSched);
   renderOutput();
+  renderCrewHint();
   renderSequence();
   renderGanttView(sched, idealSched);
   hideEmpty();
@@ -1053,17 +1183,178 @@ function renderQueueStatus() {
   }
 }
 
+let breakdownRows = [];      // {code, nums, fill} — updated in place
+let breakdownSig = null;
+
 function renderOutput() {
   const expected = state.selected.reduce((sum, s) => sum + (s.qty || 0), 0);
   const actual = state.selected.reduce((sum, s) => sum + (s.produced || 0), 0);
-  $("output-expected").textContent = `${expected} pc`;
-  $("output-expected-sub").textContent = `${state.selected.length} code(s) queued`;
-  $("output-actual").textContent = `${actual} pc`;
   const pct = expected > 0 ? Math.min(100, (actual / expected) * 100) : 0;
+
+  $("output-actual").textContent = actual;
+  $("output-expected").textContent = expected;
   $("output-progress-fill").style.width = `${pct}%`;
-  $("output-note").textContent = expected > 0 && actual > 0
-    ? `${Math.round(pct)}% of the plan produced.`
-    : "Supervisors fill the “Produced” column in the workbook, then use Reload.";
+  $("output-expected-sub").textContent = state.selected.length
+    ? `${state.selected.length} code(s) queued`
+    : "no codes queued";
+
+  // rebuild the breakdown only when its structure changed — produced values
+  // are edited in place (the signature deliberately excludes them, so typing
+  // never triggers a rebuild that would steal the input focus)
+  const sig = state.selected.map((s) => `${s.code}|${s.family}|${s.qty}`).join("|");
+  if (sig !== breakdownSig) {
+    rebuildOutputBreakdown();
+    breakdownSig = sig;
+  } else {
+    for (const ref of breakdownRows) {
+      const s = state.selected.find((x) => x.code === ref.code);
+      if (!s) continue;
+      if (+ref.input.value !== (s.produced || 0)) ref.input.value = s.produced || 0;
+      ref.fill.style.width = `${s.qty > 0 ? Math.min(100, ((s.produced || 0) / s.qty) * 100) : 0}%`;
+      ref.row.classList.toggle("done", (s.produced || 0) >= (s.qty || 0) && s.qty > 0);
+    }
+  }
+}
+
+function rebuildOutputBreakdown() {
+  const breakdown = $("output-breakdown");
+  breakdown.textContent = "";
+  breakdownRows = [];
+  if (!state.selected.length) {
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    empty.textContent = "No codes queued yet — tick codes in the planner view.";
+    breakdown.appendChild(empty);
+    return;
+  }
+  for (const s of state.selected) {
+    const done = (s.produced || 0) >= (s.qty || 0) && s.qty > 0;
+    const row = document.createElement("div");
+    row.className = "ob-row" + (done ? " done" : "");
+
+    const head = document.createElement("div");
+    head.className = "ob-head";
+    const name = document.createElement("span");
+    name.className = "ob-name";
+    name.textContent = s.code;
+    name.title = `${s.code} — ${s.family}`;
+    const producedInput = document.createElement("input");
+    producedInput.type = "number";
+    producedInput.className = "ob-input";
+    producedInput.min = "0";
+    producedInput.step = "1";
+    producedInput.value = s.produced || 0;
+    producedInput.title = "Pieces created for this order";
+    producedInput.addEventListener("change", () => {
+      s.produced = Math.max(0, Math.round(+producedInput.value || 0));
+      producedInput.value = s.produced;
+      renderOutput();
+    });
+    const qty = document.createElement("span");
+    qty.className = "ob-qty";
+    qty.textContent = `/ ${s.qty} pc`;
+    head.append(name, producedInput, qty);
+
+    const bar = document.createElement("div");
+    bar.className = "ob-bar";
+    const fill = document.createElement("div");
+    fill.className = "ob-bar-fill";
+    fill.style.width = `${s.qty > 0 ? Math.min(100, ((s.produced || 0) / s.qty) * 100) : 0}%`;
+    bar.appendChild(fill);
+
+    row.append(head, bar);
+    breakdown.appendChild(row);
+    breakdownRows.push({ code: s.code, input: producedInput, fill, row });
+  }
+}
+
+let producedRows = [];       // {code, input} — updated in place
+let producedSig = null;
+
+function renderProducedList() {
+  const host = $("prod-produced-list");
+  if (!host) return;
+  const sig = state.selected.map((s) => s.code).join("|");
+  if (sig === producedSig) {
+    // in-place value sync (keeps input focus while typing)
+    for (const pr of producedRows) {
+      const s = state.selected.find((x) => x.code === pr.code);
+      if (s && +pr.input.value !== (s.produced || 0)) pr.input.value = s.produced || 0;
+    }
+    return;
+  }
+  producedSig = sig;
+  producedRows = [];
+  host.textContent = "";
+  for (const s of state.selected) {
+    const row = document.createElement("div");
+    row.className = "produced-row";
+
+    const main = document.createElement("div");
+    main.className = "queue-main";
+    const name = document.createElement("span");
+    name.className = "queue-name";
+    name.textContent = s.code;
+    name.title = `${s.code} — ${s.family}`;
+    const fam = document.createElement("span");
+    fam.className = "queue-family";
+    fam.textContent = `${s.family} · planned ${s.qty} pc`;
+    main.append(name, fam);
+
+    const minus = document.createElement("button");
+    minus.className = "icon-btn"; minus.textContent = "−";
+    minus.title = "One piece less";
+    minus.addEventListener("click", () => {
+      s.produced = Math.max(0, (s.produced || 0) - 1);
+      input.value = s.produced || 0;
+      renderOutput();
+    });
+
+    const input = document.createElement("input");
+    input.type = "number"; input.min = "0"; input.value = s.produced || 0;
+    input.addEventListener("change", () => {
+      s.produced = Math.max(0, Math.round(+input.value || 0));
+      input.value = s.produced;
+      renderOutput();
+    });
+
+    const plus = document.createElement("button");
+    plus.className = "icon-btn"; plus.textContent = "+";
+    plus.title = "One piece more";
+    plus.addEventListener("click", () => {
+      s.produced = (s.produced || 0) + 1;
+      input.value = s.produced;
+      renderOutput();
+    });
+
+    row.append(main, minus, input, plus);
+    host.appendChild(row);
+    producedRows.push({ code: s.code, input });
+  }
+  if (!state.selected.length) {
+    const empty = document.createElement("p");
+    empty.className = "cal-none";
+    empty.textContent = "No codes queued — ask a planner to build the order queue first.";
+    host.appendChild(empty);
+  }
+}
+
+function renderCrewHint() {
+  const hint = $("crew-hint");
+  if (!hint) return;
+  const crew = state.crew;
+  let f;
+  try { f = compileCrewFactor(state.crewFactor)(crew); } catch { f = 1; }
+  const noImpact = Math.abs(f - 1) < 1e-9;
+  if (crew <= 1) {
+    hint.textContent = noImpact
+      ? "One worker. Raise the crew and set f(crew) to model parallel work."
+      : "One worker — the factor has no effect until the crew is larger.";
+  } else if (noImpact) {
+    hint.textContent = `${crew} workers — no time impact (f(crew) = 1). Define f(crew) to model parallel work.`;
+  } else {
+    hint.textContent = `${crew} workers — per-piece time ×${f.toFixed(2)}.`;
+  }
 }
 
 function resetMetrics() {
@@ -1081,13 +1372,17 @@ function renderMetrics(sched, idealSched) {
   $("m-run").textContent = fmtDur(sched.runMinutes);
 
   const idealRun = idealRunMinutes(state.selected.map((s) => ({ qty: s.qty, unitMinutes: s.unitMinutes })));
-  const lost = sched.runMinutes - idealRun;
+  // like-for-like: the OEE loss compares against the same plan at 100% OEE
+  // with the SAME crew size
+  const crewF = compileCrewFactor(state.crewFactor)(state.crew);
+  const crewIdealRun = idealRun * crewF;
+  const lost = sched.runMinutes - crewIdealRun;
   $("loss-value").textContent = fmtDur(Math.max(0, lost));
   const pct = state.oee > 0 ? Math.round((1 / state.oee - 1) * 100) : 0;
   $("loss-note").textContent = state.oee >= 0.999
     ? "No loss — running at 100% OEE."
     : `Production takes ${pct}% longer than it would at 100% OEE.`;
-  $("loss-bar-actual").style.width = `${Math.min(100, (sched.runMinutes / Math.max(idealRun, 1)) * 50)}%`;
+  $("loss-bar-actual").style.width = `${Math.min(100, (sched.runMinutes / Math.max(crewIdealRun, 1)) * 50)}%`;
   $("loss-bar-ideal").style.width = "50%";
 }
 
@@ -1099,7 +1394,7 @@ function renderSequence() {
   host.textContent = "";
   if (!state.selected.length) return;
 
-  const initial = state.initialFamily === "__start__" ? "__start__" : state.initialFamily || null;
+  const initial = state.initialFamily || null;
   const visits = visitsFromCodeOrder(null, state.selected);
 
   if (initial) {
@@ -1307,8 +1602,8 @@ function buildWorkbook() {
   X.utils.book_append_sheet(
     wb,
     X.utils.aoa_to_sheet([
-      ["Code", "Family", "Unit time (min)", "Description"],
-      ...state.catalog.map((c) => [c.code, c.family, c.unitMinutes, c.name || ""]),
+      ["Code", "Family", "Unit time (s)", "Description"],
+      ...state.catalog.map((c) => [c.code, c.family, Math.round(c.unitMinutes * 60), c.name || ""]),
     ]),
     "Codes"
   );
@@ -1429,12 +1724,36 @@ function stamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
+/* ------------------------------------------------------------------ tabs -- */
+
+function setView(view) {
+  state.view = view;
+  document.body.dataset.view = view;
+  if (els["view-production"]) els["view-production"].hidden = view !== "production";
+  els["view-select"].value = view;
+  if (view === "production") renderProducedList();
+}
+
+els["view-select"].addEventListener("change", () => setView(els["view-select"].value));
+
+/* ------------------------------------------------------------- now marker -- */
+
+// keeps the "now" line accurate — moves it every second; no chart rebuild
+function ensureNowTimer() {
+  if (ensureNowTimer.started) return;
+  ensureNowTimer.started = true;
+  setInterval(() => {
+    if (state.result && !document.hidden) updateNowMarker(els["gantt-host"]);
+  }, 1000);
+}
+
 /* ------------------------------------------------------------------ boot -- */
 
 renderCatalog();
 renderSelected();
 renderCalendarEditors();
 renderSolverOptions();
+ensureNowTimer();
 els["start-date"].value = plDate.fromISO(todayStr());
 els["oee-range"].value = 80;
 els["oee-number"].value = 80;

@@ -9,7 +9,8 @@ import (
 // Settings is the small piece of configuration the desktop server persists
 // between runs (currently: where the holidays file lives).
 type Settings struct {
-	HolidaysPath string `json:"holidaysPath"`
+	HolidaysPath string    `json:"holidaysPath"`
+	Holidays     []Holiday `json:"holidays,omitempty"` // last known good, used when the file is unreachable
 }
 
 func settingsFile(root string) string {
