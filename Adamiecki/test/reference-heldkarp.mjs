@@ -8,7 +8,7 @@
  * against. Not used by the web app.
  */
 
-import { familyList, setupBetween, idealRunMinutes } from "../js/solver-bruteforce.js";
+import { familyList, setupBetween, idealRunMinutes } from "../src/js/solver-bruteforce.js";
 
 /**
  * Returns the optimal total setup minutes (number) for the given ctx.

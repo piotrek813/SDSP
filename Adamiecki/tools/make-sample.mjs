@@ -9,13 +9,13 @@ import { fileURLToPath } from "node:url";
 // The CDN bundle is written for browsers; evaluate it with `exports`/`module`
 // hidden so it builds and returns its own XLSX object instead of exporting
 // the embedded codepage table.
-const src = fs.readFileSync(new URL("../vendor/xlsx.full.min.js", import.meta.url), "utf8");
+const src = fs.readFileSync(new URL("../src/vendor/xlsx.full.min.js", import.meta.url), "utf8");
 const XLSX = new Function("exports", "module", "window", src + "\n;return XLSX;")(
   undefined, undefined, undefined
 );
 XLSX.set_fs(fs); // let the browser bundle write files under Node
 
-const outPath = fileURLToPath(new URL("../sample-data/demo-input.xlsx", import.meta.url));
+const outPath = fileURLToPath(new URL("../src/sample-data/demo-input.xlsx", import.meta.url));
 
 /* ----------------------------------------------------------- the model -- */
 
@@ -45,13 +45,13 @@ const codes = [
 
 // asymmetric family-to-family changeover minutes
 const raw = {
-  "Sealant":   [0, 25, 18, 35, 12, 20, 40],
-  "Adhesive":  [22, 0, 15, 30, 12, 18, 35],
-  "Primer":    [28, 20, 0, 25, 14, 22, 30],
-  "Coating":   [38, 30, 24, 0, 15, 25, 20],
-  "Cleaner":   [14, 12, 16, 22, 0, 10, 30],
+  "Sealant": [0, 25, 18, 35, 12, 20, 40],
+  "Adhesive": [22, 0, 15, 30, 12, 18, 35],
+  "Primer": [28, 20, 0, 25, 14, 22, 30],
+  "Coating": [38, 30, 24, 0, 15, 25, 20],
+  "Cleaner": [14, 12, 16, 22, 0, 10, 30],
   "Lubricant": [24, 20, 25, 28, 12, 0, 32],
-  "Resin":     [42, 35, 28, 18, 30, 34, 0],
+  "Resin": [42, 35, 28, 18, 30, 34, 0],
 };
 const startRow = { Sealant: 35, Adhesive: 30, Primer: 25, Coating: 40, Cleaner: 15, Lubricant: 20, Resin: 45 };
 

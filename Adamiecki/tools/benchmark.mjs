@@ -30,8 +30,8 @@ import {
   familyList,
   sequenceSetupMinutes,
   setupBetween,
-} from "../js/solver-bruteforce.js";
-import { solveHeldKarp } from "../js/solver-heldkarp.js";
+} from "../src/js/solver-bruteforce.js";
+import { solveHeldKarp } from "../src/js/solver-heldkarp.js";
 import { heldKarpOptimum } from "../test/reference-heldkarp.mjs";
 
 /* --------------------------------------------------------------- options -- */

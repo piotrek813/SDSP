@@ -22,14 +22,14 @@ import {
   buildSchedule,
   buildScheduleFromCodeOrder,
   visitsFromCodeOrder,
-} from "../js/solver-bruteforce.js";
+} from "../src/js/solver-bruteforce.js";
 import { heldKarpOptimum } from "./reference-heldkarp.mjs";
 
 /* --------------------------------------------------------------- helpers -- */
 
 // Deterministic PRNG so failures reproduce.
 function mulberry32(seed) {
-  return function () {
+  return function() {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
@@ -132,8 +132,8 @@ test("brute force finds the known optimum on a hand-checked 4-family case", () =
   const ctx = {
     setup: {
       "Start>A": 40, "Start>B": 50, "Start>C": 60, "Start>D": 70,
-      "A>B": 5,  "A>C": 45, "A>D": 50,
-      "B>A": 35, "B>C": 5,  "B>D": 40,
+      "A>B": 5, "A>C": 45, "A>D": 50,
+      "B>A": 35, "B>C": 5, "B>D": 40,
       "C>A": 30, "C>B": 25, "C>D": 5,
       "D>A": 20, "D>B": 15, "D>C": 10,
     },

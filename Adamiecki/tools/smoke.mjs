@@ -64,7 +64,7 @@ const saved = await page.evaluate(async () => {
   window.showSaveFilePicker = async () => ({
     createWritable: async () => ({
       write: async (data) => { captured = data; },
-      close: async () => {},
+      close: async () => { },
     }),
   });
   document.getElementById("btn-export-book").click();

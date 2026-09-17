@@ -6,11 +6,11 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { solveBruteForce, familyList, sequenceSetupMinutes } from "../js/solver-bruteforce.js";
-import { solveHeldKarp, HELD_KARP_MAX_FAMILIES } from "../js/solver-heldkarp.js";
+import { solveBruteForce, familyList, sequenceSetupMinutes } from "../src/js/solver-bruteforce.js";
+import { solveHeldKarp, HELD_KARP_MAX_FAMILIES } from "../src/js/solver-heldkarp.js";
 
 function mulberry32(seed) {
-  return function () {
+  return function() {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
