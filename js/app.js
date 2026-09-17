@@ -43,7 +43,7 @@ const state = {
   parsed: null,            // excel.parseWorkbook result
   catalog: [],             // all codes from the file
   selected: [],            // {code, family, qty, unitMinutes, name} — THE run order
-  mode: "optimal",         // "optimal" = follow the solver, "manual" = user's order
+  mode: "optymalna",         // "optymalna" = follow the solver, "manual" = user's order
   oee: 0.8,
   startDate: null,
   startAt: "",             // "" = as soon as the calendar allows
@@ -196,7 +196,7 @@ els["btn-demo"].addEventListener("click", () => loadDemo().catch(showLoadError))
 
 els["btn-reload"].addEventListener("click", () => {
   if (!state.parsed) {
-    banner("Load a workbook first — there is nothing to reload yet.", true);
+    banner("Najpierw otwórz skoroszyt — nie ma czego odświeżyć.", true);
     return;
   }
   reloadWorkbook().catch((err) => {
@@ -235,7 +235,7 @@ async function reloadWorkbook() {
     const buf = new Uint8Array(await state.file.arrayBuffer());
     applyParsedReloaded(excelParser.parseWorkbookFromBuffer(buf), state.fileName);
   } catch (err) {
-    banner(`The workbook changed on disk after it was opened — use “Open workbook…” to pick it again, then Reload will track it.`, true);
+    banner(`Skoroszyt zmienił się na dysku po otwarciu — użyj „Otwórz skoroszyt…” aby wybrać go ponownie.`, true);
   }
 }
 
@@ -281,7 +281,7 @@ function applyParsedReloaded(parsed, fileName) {
   if (removed || added) {
     banner(`Workbook reloaded — ${added} new code(s) in the catalogue, ${removed} queued code(s) no longer in the file.`, false);
   } else {
-    banner("Workbook reloaded — queue, quantities and OEE kept.", false);
+    banner("Skoroszyt odświeżony — kolejka, ilości i OEE zachowane.", false);
   }
   renderDataSummary();
   renderCatalog();
@@ -300,7 +300,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
   state.fileHandle = isDemo ? null : state.fileHandle;
   state.isDemo = isDemo;
   state.catalog = parsed.codes.map((c) => ({ ...c, id: c.code }));
-  state.mode = "optimal";
+  state.mode = "optymalna";
   state.optCache = null;
   state.oee = normalizeOee(parsed.settings.oee ?? 0.8);
   state.startDate = defaultStartDate(parsed.settings.startDate);
@@ -338,7 +338,7 @@ function applyParsed(parsed, fileName, { isDemo = false } = {}) {
       })
       .filter(Boolean);
   } else {
-    state.mode = "optimal";
+    state.mode = "optymalna";
     state.selected = [];
   }
 
@@ -431,7 +431,7 @@ function renderCatalog() {
   if (!state.catalog.length) {
     const empty = document.createElement("p");
     empty.className = "panel-empty";
-    empty.textContent = "Load a workbook to list its codes.";
+    empty.textContent = "Otwórz skoroszyt, aby wyświetlić kody.";
     list.appendChild(empty);
   }
 }
@@ -559,7 +559,7 @@ function renderSelected() {
 }
 
 els["btn-reoptimise"].addEventListener("click", () => {
-  state.mode = "optimal";
+  state.mode = "optymalna";
   recompute(); // immediate — no debounce on an explicit click
 });
 
@@ -583,7 +583,7 @@ function renderCalendarEditors() {
 
     const start = document.createElement("input");
     start.type = "time"; start.value = minutesToHMInput(item.start);
-    start.title = kind === "shift" ? "Shift start" : "Break start";
+    start.title = kind === "shift" ? "Początek zmiany" : "Początek przerwy";
     start.addEventListener("change", () => {
       const v = hmToMinutes(start.value);
       if (v != null) { item.start = v; scheduleRecompute(); }
@@ -591,7 +591,7 @@ function renderCalendarEditors() {
 
     const end = document.createElement("input");
     end.type = "time"; end.value = minutesToHMInput(item.end);
-    end.title = kind === "shift" ? "Shift end" : "Break end";
+    end.title = kind === "shift" ? "Koniec zmiany" : "Koniec przerwy";
     end.addEventListener("change", () => {
       const v = hmToMinutes(end.value);
       if (v != null) { item.end = v; scheduleRecompute(); }
@@ -630,7 +630,7 @@ function renderBreakRows() {
 
     const start = document.createElement("input");
     start.type = "time"; start.value = minutesToHMInput(item.start);
-    start.title = "Break start";
+    start.title = "Początek przerwy";
     start.addEventListener("change", () => {
       const v = hmToMinutes(start.value);
       if (v != null) { item.start = v; scheduleRecompute(); }
@@ -638,7 +638,7 @@ function renderBreakRows() {
 
     const end = document.createElement("input");
     end.type = "time"; end.value = minutesToHMInput(item.end);
-    end.title = "Break end";
+    end.title = "Koniec przerwy";
     end.addEventListener("change", () => {
       const v = hmToMinutes(end.value);
       if (v != null) { item.end = v; scheduleRecompute(); }
@@ -664,7 +664,7 @@ function renderBreakRows() {
     if (!state.breaks.length) {
       const none = document.createElement("p");
       none.className = "cal-none";
-      none.textContent = "No breaks defined.";
+      none.textContent = "Brak przerw.";
       list.appendChild(none);
     }
   }
@@ -683,12 +683,12 @@ function renderFailRows() {
       date.placeholder = "dd/mm/yyyy";
       date.inputMode = "numeric";
       date.autocomplete = "off";
-      date.title = "Failure date";
+      date.title = "Data awarii";
       bindDateInput(date, () => f.date || state.startDate, (iso) => { f.date = iso; });
 
       const start = document.createElement("input");
       start.type = "time"; start.value = minutesToHMInput(f.start);
-      start.title = "Failure start";
+      start.title = "Początek awarii";
       start.addEventListener("change", () => {
         const v = hmToMinutes(start.value);
         if (v != null) { f.start = v; scheduleRecompute(); }
@@ -696,7 +696,7 @@ function renderFailRows() {
 
       const end = document.createElement("input");
       end.type = "time"; end.value = minutesToHMInput(f.end);
-      end.title = "Failure end";
+      end.title = "Koniec awarii";
       end.addEventListener("change", () => {
         const v = hmToMinutes(end.value);
         if (v != null) { f.end = v; scheduleRecompute(); }
@@ -706,8 +706,8 @@ function renderFailRows() {
       comment.type = "text";
       comment.className = "comment-input";
       comment.value = f.comment || "";
-      comment.placeholder = "what broke?";
-      comment.title = "Failure comment";
+      comment.placeholder = "co się zepsuło?";
+      comment.title = "Komentarz awarii";
       comment.addEventListener("change", () => {
         f.comment = comment.value.trim();
         scheduleRecompute();
@@ -728,7 +728,7 @@ function renderFailRows() {
     if (!state.failures.length) {
       const none = document.createElement("p");
       none.className = "cal-none";
-      none.textContent = "No failures recorded.";
+      none.textContent = "Brak zarejestrowanych awarii.";
       list.appendChild(none);
     }
   }
@@ -789,9 +789,9 @@ async function initHolidays() {
     if (data.error) {
       renderHolidays(data.error, "error");
     } else if (data.count) {
-      renderHolidays(`${data.count} holiday(s) loaded${data.path ? ` from ${data.path}` : " (saved holidays)"}.`, "ok");
+      renderHolidays(`${data.count} świąt wczytano${data.path ? ` z ${data.path}` : " (zapisane święta)"}.`, "ok");
     } else {
-      renderHolidays("No holidays file configured.");
+      renderHolidays("Nie skonfigurowano pliku świąt.");
     }
   } catch {
     state.serverApi = false;
@@ -804,16 +804,16 @@ function applyHolidays(data, { quiet = false } = {}) {
   state.holidays = Array.isArray(data.holidays) ? data.holidays : [];
   els["holidays-path"].value = state.holidaysPath;
   if (data.error) renderHolidays(`Could not load holidays: ${data.error}`, "error");
-  else if (quiet && !state.holidays.length) renderHolidays("No holidays file configured.");
-  else renderHolidays(`${state.holidays.length} holiday(s) loaded${state.holidaysPath ? ` from ${state.holidaysPath}` : ""}.`, "ok");
+  else if (quiet && !state.holidays.length) renderHolidays("Nie skonfigurowano pliku świąt.");
+  else renderHolidays(`${state.holidays.length} świąt wczytano${state.holidaysPath ? ` z ${state.holidaysPath}` : ""}.`, "ok");
   scheduleRecompute();
 }
 
 async function loadHolidaysFromPath() {
   const path = els["holidays-path"].value.trim();
-  if (!path) { renderHolidays("Enter a file path first.", "error"); return; }
+  if (!path) { renderHolidays("Najpierw wprowadź ścieżkę pliku.", "error"); return; }
   if (!holidaysApiAvailable()) {
-    renderHolidays("Reading paths needs the desktop server (sdsp.exe) — use “Import file…” here.", "error");
+    renderHolidays("Odczyt ścieżek wymaga serwera desktopowego (sdsp.exe) — użyj „Importuj plik…” tutaj.", "error");
     return;
   }
   try {
@@ -825,10 +825,10 @@ async function loadHolidaysFromPath() {
     const data = await res.json();
     applyHolidays(data);
     if (!data.error) {
-      renderHolidays(`${data.count} holiday(s) loaded from ${path} and saved — they will load automatically next time.`, "ok");
+      renderHolidays(`${data.count} świąt wczytano z ${path} i zapisano — wczytają się automatycznie następnym razem.`, "ok");
     }
   } catch (err) {
-    renderHolidays(`Could not reach the planner server: ${err.message}`, "error");
+    renderHolidays(`Nie można połączyć się z serwerem: ${err.message}`, "error");
   }
 }
 
@@ -854,7 +854,7 @@ function importHolidaysFile(file) {
   const reader = new FileReader();
   reader.onload = async () => {
     const holidays = parseHolidayText(String(reader.result));
-    if (!holidays.length) { renderHolidays(`No usable holiday lines found in ${file.name}.`, "error"); return; }
+    if (!holidays.length) { renderHolidays(`Nie znaleziono świąt w pliku ${file.name}.`, "error"); return; }
 
     // push to the planner server so the import survives restarts
     if (holidaysApiAvailable()) {
@@ -869,12 +869,12 @@ function importHolidaysFile(file) {
         renderHolidays(
           data.error
             ? `${data.error}`
-            : `${holidays.length} holiday(s) imported from ${file.name} and saved — they will load automatically next time.`,
+            : `${holidays.length} świąt zaimportowano z ${file.name} i zapisano — wczytają się automatycznie następnym razem.`,
           data.error ? "error" : "ok"
         );
         return;
       } catch (err) {
-        renderHolidays(`Could not reach the planner server: ${err.message}`, "error");
+        renderHolidays(`Nie można połączyć się z serwerem: ${err.message}`, "error");
         return;
       }
     }
@@ -882,7 +882,7 @@ function importHolidaysFile(file) {
     // no server API: session-only
     state.holidaysPath = "";
     state.holidays = holidays;
-    renderHolidays(`${holidays.length} holiday(s) imported from ${file.name} (session only — start the planner via sdsp.exe to save them).`, "ok");
+    renderHolidays(`${holidays.length} świąt zaimportowano z ${file.name} (tylko sesja — uruchom planistę przez sdsp.exe aby zapisać).`, "ok");
     scheduleRecompute();
   };
   reader.onerror = () => renderHolidays(`Could not read ${file.name}.`, "error");
@@ -969,7 +969,7 @@ function renderSolverOptions() {
   const sel = els["initial-family"];
   sel.textContent = "";
   const optNone = document.createElement("option");
-  optNone.value = ""; optNone.textContent = "No setup (machine running)";
+  optNone.value = ""; optNone.textContent = "Brak przezbrojenia (maszyna pracuje)";
   sel.appendChild(optNone);
   for (const f of state.parsed ? state.parsed.families : []) {
     const o = document.createElement("option");
@@ -980,7 +980,7 @@ function renderSolverOptions() {
 
   const first = els["fixed-first"];
   first.textContent = "";
-  first.appendChild(new Option("Optimise freely", ""));
+  first.appendChild(new Option("Optymalizacja swobodna", ""));
   for (const f of state.parsed ? state.parsed.families : []) {
     first.appendChild(new Option(`Start with ${f}`, f));
   }
@@ -1094,7 +1094,7 @@ function recompute() {
 
   // Follow the optimiser: in optimal mode the queue mirrors the best sequence.
   // Manual mode never touches the user's order.
-  if (state.mode === "optimal" && opt) {
+  if (state.mode === "optymalna" && opt) {
     const wanted = queueFromSequence(opt.sequence);
     if (window.__sdspDebug) window.__sdspDebug({ tag: "optimal-branch", seq: opt.sequence, wanted: wanted.map((x) => x.code), same: sameOrder(state.selected, wanted) });
     if (!sameOrder(state.selected, wanted)) {
@@ -1148,10 +1148,10 @@ function renderSolveStatus() {
     head = "Not optimised — too many families for exact sequencing; running in queue order.";
   } else if (state.mode === "manual") {
     head = gapMin > 1e-6
-      ? `Manual sequence · ${fmtDur(sched.setupMinutes)} changeover — +${fmtDur(gapMin)} more than the optimum (Held–Karp)`
-      : `Manual sequence · matches the optimum (${fmtDur(sched.setupMinutes)} changeover)`;
+      ? `Kolejność ręczna · ${fmtDur(sched.setupMinutes)} przezbrojeń — +${fmtDur(gapMin)} więcej niż optimum`
+      : `Kolejność ręczna · zgodna z optimum (${fmtDur(sched.setupMinutes)} przezbrojeń)`;
   } else {
-    head = `Optimal — Held–Karp DP · ${opt.evaluated.toLocaleString()} states · ${opt.elapsedMs} ms${state.fixedFirst ? ` · ${state.fixedFirst} pinned first` : ""}`;
+    head = `Optymalna — Held–Karp DP · ${opt.evaluated.toLocaleString()} stanów · ${opt.elapsedMs} ms${state.fixedFirst ? ` · ${state.fixedFirst} najpierw` : ""}`;
   }
   $("solver-note").textContent = head;
 }
@@ -1168,8 +1168,8 @@ function renderQueueStatus() {
     btn.disabled = true;
     return;
   }
-  if (state.mode === "optimal") {
-    pill.textContent = "optimal";
+  if (state.mode === "optymalna") {
+    pill.textContent = "optymalna";
     pill.className = "mode-pill ok";
     btn.disabled = true;
   } else if (gapMin > 1e-6) {
@@ -1195,8 +1195,8 @@ function renderOutput() {
   $("output-expected").textContent = expected;
   $("output-progress-fill").style.width = `${pct}%`;
   $("output-expected-sub").textContent = state.selected.length
-    ? `${state.selected.length} code(s) queued`
-    : "no codes queued";
+    ? `${state.selected.length} kodów w kolejce`
+    : "brak kodów w kolejce";
 
   // rebuild the breakdown only when its structure changed — produced values
   // are edited in place (the signature deliberately excludes them, so typing
@@ -1223,7 +1223,7 @@ function rebuildOutputBreakdown() {
   if (!state.selected.length) {
     const empty = document.createElement("p");
     empty.className = "hint";
-    empty.textContent = "No codes queued yet — tick codes in the planner view.";
+    empty.textContent = "Brak kodów w kolejce — zaznacz kody w widoku planisty.";
     breakdown.appendChild(empty);
     return;
   }
@@ -1252,7 +1252,7 @@ function rebuildOutputBreakdown() {
     });
     const qty = document.createElement("span");
     qty.className = "ob-qty";
-    qty.textContent = `/ ${s.qty} pc`;
+    qty.textContent = `/ ${s.qty} szt`;
     head.append(name, producedInput, qty);
 
     const bar = document.createElement("div");
@@ -1334,7 +1334,7 @@ function renderProducedList() {
   if (!state.selected.length) {
     const empty = document.createElement("p");
     empty.className = "cal-none";
-    empty.textContent = "No codes queued — ask a planner to build the order queue first.";
+    empty.textContent = "Brak kodów — poproś planistę o zbudowanie kolejki zleceń.";
     host.appendChild(empty);
   }
 }
@@ -1348,12 +1348,12 @@ function renderCrewHint() {
   const noImpact = Math.abs(f - 1) < 1e-9;
   if (crew <= 1) {
     hint.textContent = noImpact
-      ? "One worker. Raise the crew and set f(crew) to model parallel work."
-      : "One worker — the factor has no effect until the crew is larger.";
+      ? "Jeden pracownik. Zwiększ obsadę i ustaw f(obsada) dla pracy równoległej."
+      : "Jeden pracownik — współczynnik działa dopiero przy większej obsadzie.";
   } else if (noImpact) {
-    hint.textContent = `${crew} workers — no time impact (f(crew) = 1). Define f(crew) to model parallel work.`;
+    hint.textContent = `${crew} pracowników — brak wpływu na czas (f(obsada) = 1). Zdefiniuj f(obsada) dla pracy równoległej.`;
   } else {
-    hint.textContent = `${crew} workers — per-piece time ×${f.toFixed(2)}.`;
+    hint.textContent = `${crew} pracowników — czas na sztukę ×${f.toFixed(2)}.`;
   }
 }
 
@@ -1381,7 +1381,7 @@ function renderMetrics(sched, idealSched) {
   const pct = state.oee > 0 ? Math.round((1 / state.oee - 1) * 100) : 0;
   $("loss-note").textContent = state.oee >= 0.999
     ? "No loss — running at 100% OEE."
-    : `Production takes ${pct}% longer than it would at 100% OEE.`;
+    : `Produkcja trwa ${pct}% dłużej niż przy 100% OEE.`;
   $("loss-bar-actual").style.width = `${Math.min(100, (sched.runMinutes / Math.max(crewIdealRun, 1)) * 50)}%`;
   $("loss-bar-ideal").style.width = "50%";
 }
@@ -1669,7 +1669,7 @@ function buildWorkbook() {
 }
 
 els["btn-export-book"].addEventListener("click", async () => {
-  if (!state.parsed) { banner("Load a workbook first — there is nothing to download yet.", true); return; }
+  if (!state.parsed) { banner("Najpierw otwórz skoroszyt — nie ma czego pobrać.", true); return; }
   const X = window.XLSX;
   const out = X.write(buildWorkbook(), { bookType: "xlsx", type: "array" });
   const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cadence — single-machine sequence planner</title>
+  <title>Cadence — planowanie sekwencji na jednej maszynie</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
@@ -13,24 +13,24 @@
   <header class="topbar">
     <div class="brand">
       <img src="logo.svg" alt="Danfoss" class="brand-logo" />
-      <span class="brand-sub">Cadence — sequence planner</span>
+      <span class="brand-sub">Cadence — planowanie sekwencji</span>
     </div>
     <div class="topbar-actions">
-      <select id="view-select" class="view-select" title="Which view of the planner you see">
-        <option value="planner">Planner view</option>
-        <option value="production">Production view</option>
+      <select id="view-select" class="view-select" title="Widok planisty">
+        <option value="planner">Widok planisty</option>
+        <option value="production">Widok produkcji</option>
       </select>
       <span class="divider" aria-hidden="true"></span>
-      <button id="btn-file" class="btn primary" type="button">Open workbook…</button>
+      <button id="btn-file" class="btn primary" type="button">Otwórz skoroszyt…</button>
       <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm" hidden />
-      <button id="btn-demo" class="btn" type="button">Load demo data</button>
+      <button id="btn-demo" class="btn" type="button">Dane demonstracyjne</button>
       <button id="btn-reload" class="btn" type="button"
-        title="Re-read the workbook from disk — keeps your queue, quantities and OEE" disabled>Reload</button>
+        title="Wczytaj ponownie skoroszyt z dysku — zachowuje kolejkę, ilości i OEE" disabled>Odśwież</button>
       <span class="divider" aria-hidden="true"></span>
       <button id="btn-export-book" class="btn" type="button"
-        title="Download this plan as a workbook (setup matrix, codes, order, settings)">Download workbook</button>
-      <button id="btn-svg" class="btn" type="button" title="Download the chart as SVG">SVG</button>
-      <button id="btn-png" class="btn" type="button" title="Download the chart as PNG">PNG</button>
+        title="Zapisz plan jako skoroszyt (macierz przezbrojeń, kody, kolejność, ustawienia)">Pobierz skoroszyt</button>
+      <button id="btn-svg" class="btn" type="button" title="Zapisz wykres jako SVG">SVG</button>
+      <button id="btn-png" class="btn" type="button" title="Zapisz wykres jako PNG">PNG</button>
     </div>
   </header>
 
@@ -41,93 +41,92 @@
     <aside class="sidebar">
 
       <section class="panel">
-        <h2>Workbook</h2>
+        <h2>Skoroszyt</h2>
         <div id="data-summary" class="data-summary" hidden></div>
-
       </section>
 
       <section class="panel" data-views="planner">
-        <h2>Codes</h2>
-        <input id="catalog-search" type="search" placeholder="Filter by code or family…" autocomplete="off" />
-        <div id="catalog-list" class="catalog-list" aria-label="Available codes"></div>
+        <h2>Kody</h2>
+        <input id="catalog-search" type="search" placeholder="Filtruj po kodzie lub rodzinie…" autocomplete="off" />
+        <div id="catalog-list" class="catalog-list" aria-label="Dostępne kody"></div>
       </section>
 
       <section class="panel" data-views="planner">
         <div class="panel-head">
-          <h2>Order queue</h2>
+          <h2>Kolejka zleceń</h2>
           <span class="queue-tools">
-            <span id="queue-pill" class="mode-pill ok" title="Execution order status">optimal</span>
+            <span id="queue-pill" class="mode-pill ok" title="Status kolejności wykonania">optymalna</span>
             <button id="btn-reoptimise" class="btn tiny" type="button" disabled
-              title="Rerun the optimisation and replace this order with the best sequence">Re-optimise</button>
+              title="Ponownie uruchom optymalizację i zastąp kolejność najlepszą sekwencją">Optymalizuj</button>
           </span>
         </div>
-        <p class="hint">Drag or use the arrows to set the run order — mixing families adds changeovers. The amber edge
-          marks a changeover.</p>
+        <p class="hint">Przeciągnij lub użyj strzałek, aby ustawić kolejność — mieszanie rodzin dodaje przezbrojenia.
+          Pomarańczowa krawędź oznacza przezbrojenie.</p>
         <ul id="selected-list" class="queue-list"></ul>
-        <p id="selected-empty" class="hint" hidden>Nothing queued yet — tick codes above.</p>
+        <p id="selected-empty" class="hint" hidden>Brak zleceń — zaznacz kody powyżej.</p>
       </section>
 
       <section class="panel" data-views="planner,production">
-        <h2>Shift calendar</h2>
-        <label class="field">Planning direction
+        <h2>Kalendarz zmian</h2>
+        <label class="field">Kierunek planowania
           <select id="direction">
-            <option value="forward">Forward — start as soon as possible</option>
-            <option value="backward">Backward — finish by the due date</option>
+            <option value="forward">W przód — zacznij jak najwcześniej</option>
+            <option value="backward">W tył — zakończ na termin</option>
           </select>
         </label>
         <div class="field-row field-anchor-start">
-          <label>Start date <input id="start-date" type="text" class="date-input" placeholder="dd/mm/yyyy"
+          <label>Data startu <input id="start-date" type="text" class="date-input" placeholder="dd/mm/rrrr"
               inputmode="numeric" autocomplete="off" /></label>
-          <label>Not before <input id="start-time" type="time" /></label>
+          <label>Nie wcześniej niż <input id="start-time" type="time" /></label>
         </div>
         <div class="field-row field-anchor-due" hidden>
-          <label>Due date <input id="due-date" type="text" class="date-input" placeholder="dd/mm/yyyy"
+          <label>Data terminu <input id="due-date" type="text" class="date-input" placeholder="dd/mm/rrrr"
               inputmode="numeric" autocomplete="off" /></label>
-          <label>Finish by <input id="due-time" type="time" /></label>
+          <label>Zakończ do <input id="due-time" type="time" /></label>
         </div>
 
         <div class="cal-block">
-          <div class="cal-head"><span>Shifts</span><button id="btn-add-shift" class="btn tiny"
-              type="button">Add</button></div>
-          <div class="cal-cols"><span>Start</span><span>End</span></div>
+          <div class="cal-head"><span>Zmiany</span><button id="btn-add-shift" class="btn tiny"
+              type="button">Dodaj</button></div>
+          <div class="cal-cols"><span>Start</span><span>Koniec</span></div>
           <div id="shifts-list" class="cal-rows"></div>
         </div>
 
         <div class="cal-block">
-          <div class="cal-head"><span>Breaks</span><button id="btn-add-break-planner"
-              class="btn tiny add-break-btn" type="button">Add</button></div>
+          <div class="cal-head"><span>Przerwy</span><button id="btn-add-break-planner"
+              class="btn tiny add-break-btn" type="button">Dodaj</button></div>
           <div id="breaks-list-planner" class="breaks-container"></div>
         </div>
 
         <div class="cal-block">
-          <div class="cal-head"><span>Production failures</span><button id="btn-add-failure-planner"
-              class="btn tiny add-failure-btn" type="button">Add</button></div>
-          <div class="cal-cols cal-cols-failure"><span>Date</span><span>Start</span><span>End</span></div>
+          <div class="cal-head"><span>Awarie produkcyjne</span><button id="btn-add-failure-planner"
+              class="btn tiny add-failure-btn" type="button">Dodaj</button></div>
+          <div class="cal-cols cal-cols-failure"><span>Data</span><span>Start</span><span>Koniec</span></div>
           <div id="failures-list-planner" class="failures-container"></div>
-          <p class="hint">One-off unplanned downtime — pauses production and shows red on the chart.</p>
+          <p class="hint">Jednorazowy przestój — wstrzymuje produkcję i pokazuje się na czerwono na wykresie.</p>
         </div>
       </section>
 
       <section class="panel" data-views="planner,production">
-        <h2>Holidays</h2>
-        <label class="field">Holidays file (local or network path)
+        <h2>Święta</h2>
+        <label class="field">Plik świąt (dysk lokalny lub sieciowy)
           <input id="holidays-path" type="text" autocomplete="off"
-            placeholder="\\server\share\holidays.txt  ·  C:\plans\holidays.txt" />
+            placeholder="\\serwer\udzial\swieta.txt  ·  C:\plany\swieta.txt" />
         </label>
         <div class="field-row">
-          <button id="btn-holidays-load" class="btn tiny" type="button">Load from path</button>
-          <label class="btn tiny file-label">Import file…<input id="holidays-file" type="file" accept=".txt,.csv,.json"
+          <button id="btn-holidays-load" class="btn tiny" type="button">Wczytaj ze ścieżki</button>
+          <label class="btn tiny file-label">Importuj plik…<input id="holidays-file" type="file" accept=".txt,.csv,.json"
               hidden /></label>
         </div>
-        <p id="holidays-status" class="hint">No holidays loaded.</p>
+        <p id="holidays-status" class="hint">Nie wczytano świąt.</p>
         <ul id="holidays-list" class="holidays-list"></ul>
-        <p class="hint">One date per line: <em>YYYY-MM-DD;Name</em> — JSON also works. Holidays pause production.</p>
+        <p class="hint">Jedna data na wiersz: <em>RRRR-MM-DD;Nazwa</em> — działa też JSON. Święta wstrzymują produkcję.</p>
       </section>
 
       <section class="panel" data-views="planner">
-        <h2>Performance (this session)</h2>
+        <h2>Wydajność (ta sesja)</h2>
         <div class="loss-card">
-          <span class="loss-label">Lost to poor performance</span>
+          <span class="loss-label">Straty przez niską wydajność</span>
           <span id="loss-value" class="loss-value">—</span>
           <div class="loss-bars">
             <div class="loss-bar ideal" id="loss-bar-ideal"></div>
@@ -137,29 +136,28 @@
         </div>
         <div class="oee-row">
           <span class="oee-label">OEE</span>
-          <input id="oee-range" type="range" min="40" max="100" step="1" value="80" aria-label="OEE percent" />
+          <input id="oee-range" type="range" min="40" max="100" step="1" value="80" aria-label="OEE w procentach" />
           <span class="oee-numwrap"><input id="oee-number" type="number" min="5" max="100" value="80" /> %</span>
         </div>
         <div class="oee-row">
-          <span class="oee-label">Crew</span>
+          <span class="oee-label">Obsada</span>
           <input id="crew-input" type="number" min="1" max="50" step="1" value="1" />
-          <span class="oee-label">Time factor f(crew)</span>
-          <input id="crew-factor-input" type="text" value="1" title="Per-piece time multiplier as a function of the crew size x — e.g. 1/x or 1.2/x + 0.3" />
+          <span class="oee-label">Współczynnik f(obsada)</span>
+          <input id="crew-factor-input" type="text" value="1" title="Mnożnik czasu na sztukę w zależności od liczby osób x — np. 1/x lub 1.2/x + 0.3" />
         </div>
-        <span id="crew-hint" class="hint"></span>
         <span id="crew-hint" class="hint"></span>
         <label class="check">
           <input id="toggle-ideal" type="checkbox" />
-          Show the 100% OEE plan as a ghost
+          Pokaż plan przy 100% OEE jako ducha
         </label>
       </section>
 
       <section class="panel" data-views="planner">
-        <h2>Machine &amp; sequence</h2>
-        <label class="field">Machine starts in
+        <h2>Maszyna &amp; sekwencja</h2>
+        <label class="field">Maszyna zaczyna od
           <select id="initial-family"></select>
         </label>
-        <label class="field">Priority
+        <label class="field">Priorytet
           <select id="fixed-first"></select>
         </label>
       </section>
@@ -170,27 +168,27 @@
     <section class="results">
       <div class="results-head">
         <div class="solver-status">
-          <span id="solver-note" class="solver-note">Load a workbook and pick codes to plan.</span>
-          <div id="seq-chips" class="seq-chips" aria-label="Optimised family sequence"></div>
+          <span id="solver-note" class="solver-note">Otwórz skoroszyt i wybierz kody, aby zaplanować.</span>
+          <div id="seq-chips" class="seq-chips" aria-label="Zoptymalizowana sekwencja rodzin"></div>
         </div>
         <div class="metrics">
-          <div class="metric"><span class="metric-label">Finishes</span><span id="m-finish"
+          <div class="metric"><span class="metric-label">Zakończenie</span><span id="m-finish"
               class="metric-value">—</span></div>
-          <div class="metric"><span class="metric-label">Span</span><span id="m-makespan" class="metric-value">—</span>
+          <div class="metric"><span class="metric-label">Czas trwania</span><span id="m-makespan" class="metric-value">—</span>
           </div>
-          <div class="metric setup"><span class="metric-label">Changeover</span><span id="m-setup"
+          <div class="metric setup"><span class="metric-label">Przezbrojenia</span><span id="m-setup"
               class="metric-value">—</span></div>
-          <div class="metric"><span class="metric-label">Production</span><span id="m-run" class="metric-value">—</span>
+          <div class="metric"><span class="metric-label">Produkcja</span><span id="m-run" class="metric-value">—</span>
           </div>
         </div>
       </div>
 
       <section class="panel output-panel">
-        <h2>Output</h2>
+        <h2>Wynik</h2>
         <div class="output-layout">
           <div class="output-summary">
             <span class="output-ratio"><b id="output-actual">0</b><span class="output-ratio-sep"> / </span><span
-                id="output-expected">90</span><span class="output-unit"> pc</span></span>
+                id="output-expected">90</span><span class="output-unit"> szt</span></span>
             <div class="output-progress">
               <div class="output-progress-fill" id="output-progress-fill"></div>
             </div>
@@ -203,8 +201,8 @@
       <div class="gantt-card">
         <div id="gantt-host" class="gantt-host"></div>
         <div id="gantt-empty" class="gantt-empty">
-          <p>No plan yet.</p>
-          <p class="hint">Open a workbook (or load the demo), pick codes, and the best sequence appears here.</p>
+          <p>Brak planu.</p>
+          <p class="hint">Otwórz skoroszyt (lub wczytaj dane demo), wybierz kody, a najlepsza sekwencja pojawi się tutaj.</p>
         </div>
         <div id="legend" class="legend" hidden></div>
       </div>
@@ -214,33 +212,33 @@
   <main class="layout layout-production" id="view-production" hidden>
     <div class="prod-grid">
       <section class="panel">
-        <h2>Breaks</h2>
+        <h2>Przerwy</h2>
         <div class="cal-block">
-          <div class="cal-head"><span>Planned breaks</span><button id="btn-add-break-prod" class="btn tiny add-break-btn" type="button">Add</button></div>
+          <div class="cal-head"><span>Planowane przerwy</span><button id="btn-add-break-prod" class="btn tiny add-break-btn" type="button">Dodaj</button></div>
           <div id="breaks-list" class="breaks-container"></div>
         </div>
       </section>
 
       <section class="panel">
-        <h2>Production failures</h2>
-        <div class="cal-head"><button id="btn-add-failure-prod" class="btn tiny add-failure-btn" type="button">Add
-            failure</button></div>
-        <div class="cal-cols cal-cols-failure"><span>Date</span><span>Start</span><span>End</span></div>
+        <h2>Awarie produkcyjne</h2>
+        <div class="cal-head"><button id="btn-add-failure-prod" class="btn tiny add-failure-btn" type="button">Dodaj
+            awarię</button></div>
+        <div class="cal-cols cal-cols-failure"><span>Data</span><span>Start</span><span>Koniec</span></div>
         <div id="failures-list" class="failures-container"></div>
-        <p class="hint">One-off unplanned downtime — pauses production and shows red on the chart.</p>
+        <p class="hint">Jednorazowy przestój — wstrzymuje produkcję i pokazuje się na czerwono na wykresie.</p>
       </section>
 
       <section class="panel prod-wide">
-        <h2>Quantities produced</h2>
-        <p class="hint">Enter what was actually made — saved with the workbook (Download workbook).</p>
+        <h2>Wyprodukowane ilości</h2>
+        <p class="hint">Wprowadź faktyczną produkcję — zapisywana ze skoroszytem (Pobierz skoroszyt).</p>
         <div id="prod-produced-list" class="produced-list"></div>
       </section>
     </div>
   </main>
   <footer class="footnote">
-    Optimal sequencing via Held–Karp dynamic programming — up to 18 families in
-    interactive time (vs 10! permutations). OEE dilutes production time only —
-    changeovers are not affected. Session edits never write back to the workbook.
+    Optymalna sekwencja dzięki programowaniu dynamicznemu Held–Karpa — do 18 rodzin w
+    czasie interaktywnym (zamiast 10! permutacji). OEE wydłuża wyłącznie czas produkcji —
+    przezbrojenia nie są objęte. Zmiany w sesji nigdy nie zapisują się do skoroszytu.
   </footer>
 
   <script src="vendor/xlsx.full.min.js"></script>

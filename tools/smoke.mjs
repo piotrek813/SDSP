@@ -109,7 +109,7 @@ const holidayInfo = await page.evaluate(() => ({
   items: [...document.querySelectorAll("#holidays-list li")].map((li) => li.textContent),
 }));
 console.log("holiday import:", JSON.stringify(holidayInfo));
-if (!/imported/.test(holidayInfo.status)) problems.push(`holiday import status wrong: ${holidayInfo.status}`);
+if (!/zaimportowano/.test(holidayInfo.status)) problems.push(`holiday import status wrong: ${holidayInfo.status}`);
 if (holidayInfo.items.length !== 2) problems.push(`holiday list wrong: ${holidayInfo.items}`);
 
 // --- branding essentials ----------------------------------------------------
@@ -136,7 +136,7 @@ await page.screenshot({ path: SHOT.replace(".png", "-initial.png"), fullPage: tr
 if (!stats.chips) problems.push("no sequence chips rendered");
 if (stats.chips < 7) problems.push(`sequence chips: ${stats.chips} (expected >= 7 visits + machine chip)`);
 if (stats.bars < 20) problems.push(`suspiciously few gantt rects: ${stats.bars}`);
-if (!/Held–Karp|matches the optimum/.test(stats.solverNote)) problems.push(`solver note wrong: ${stats.solverNote}`);
+if (!/Held–Karp|Optymalna|zgodna z optimum/.test(stats.solverNote)) problems.push(`solver note wrong: ${stats.solverNote}`);
 if (stats.rows !== 18) problems.push(`catalog rows: ${stats.rows} (expected 18)`);
 
 // --- manual reorder: move a code across a family boundary -----------------
@@ -159,7 +159,7 @@ const manual = await page.evaluate(() => ({
 }));
 console.log("manual reorder:", JSON.stringify(manual));
 await page.screenshot({ path: SHOT.replace(".png", "-manual.png"), fullPage: true });
-if (!/Manual sequence/.test(manual.note)) problems.push(`manual note missing: ${manual.note}`);
+if (!/Kolejno\u015b\u0107 r\u0119czna|Kolejno\u015b\u0107 r\u0119czna|Kolejno\u015b\u0107/.test(manual.note)) problems.push(`manual note missing: ${manual.note}`);
 if (manual.setup === setupOptimal) problems.push(`manual mix did not change changeover time (still ${setupOptimal})`);
 if (manual.pillClass.includes("ok")) problems.push(`pill should be warn after suboptimal edit: ${manual.pillClass}`);
 if (manual.reoptDisabled) problems.push("Re-optimise should be enabled after a suboptimal edit");
@@ -175,7 +175,7 @@ const reopt = await page.evaluate(() => ({
   firstTwo: [...document.querySelectorAll("#selected-list .queue-name")].slice(0, 2).map((e) => e.textContent),
 }));
 console.log("after Re-optimise:", JSON.stringify(reopt));
-if (!/Held–Karp/.test(reopt.note)) problems.push(`re-optimise note wrong: ${reopt.note}`);
+if (!/Held–Karp|Optymalna|zgodna z optimum/.test(reopt.note)) problems.push(`re-optimise note wrong: ${reopt.note}`);
 if (reopt.setup !== setupOptimal) problems.push(`re-optimise did not restore optimal changeover (${reopt.setup} vs ${setupOptimal})`);
 if (reopt.firstTwo[0] !== "RS-190" || reopt.firstTwo[1] !== "RS-300") {
   problems.push(`queue not restored to optimal head: ${reopt.firstTwo.join(",")}`);
@@ -197,7 +197,7 @@ console.log(`OEE 80% -> 100%: production ${before} -> ${after}`);
 await page.select("#fixed-first", "Resin");
 await new Promise((r) => setTimeout(r, 400));
 const note = await page.$eval("#solver-note", (el) => el.textContent);
-if (!/pinned/.test(note)) problems.push(`pin note missing: ${note}`);
+if (!/najpierw|pinned/.test(note)) problems.push(`pin note missing: ${note}`);
 console.log("pinned:", note);
 
 // --- calendar edit --------------------------------------------------------

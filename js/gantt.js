@@ -314,7 +314,7 @@ export function renderGantt(container, schedule, opts = {}) {
     display: nowVisible ? "" : "none",
   });
   svg.appendChild(nowLine);
-  const nowLabel = txt(svg, nowX, plotTop - 4, "now", {
+  const nowLabel = txt(svg, nowX, plotTop - 4, "teraz", {
     "font-size": 9.5, fill: "#191919", "font-weight": 700,
     "text-anchor": "middle", "paint-order": "stroke",
     stroke: "#ffffff", "stroke-width": 3,
@@ -339,7 +339,7 @@ export function renderGantt(container, schedule, opts = {}) {
   return svg;
 }
 
-/** Move the "now" marker without rebuilding the chart. */
+/** Move the "teraz" marker without rebuilding the chart. */
 export function updateNowMarker(container) {
   const m = container && container._nowMarker;
   if (m && m.update) m.update();
@@ -375,7 +375,7 @@ function attachTooltips(svg, schedule, colorOf, opts) {
     const s0 = new Date(+target.dataset.s0);
     const s1 = new Date(+target.dataset.s1);
     if (target.dataset.kind === "setup") {
-      const from = row.setupFrom && row.setupFrom !== "__start__" ? `from ${row.setupFrom}` : "from machine start";
+      const from = row.setupFrom && row.setupFrom !== "__start__" ? `z ${row.setupFrom}` : "od startu maszyny";
       show(evt, `<b>Changeover</b> into ${row.family}<br><span class="muted">${from} · ${fmtTime(s0)}–${fmtTime(s1)} · ${fmtDur((s1 - s0) / 60000)}</span>`);
     } else {
       show(evt, `<b>${row.code}</b> — ${row.family}<br>${row.qty} pc × ${round1(row.unitEffective)} min at ${Math.round(((opts.oee == null ? 1 : opts.oee) * 100))}% OEE<br><span class="m">${fmtTime(s0)}–${fmtTime(s1)} · ${fmtDur((s1 - s0) / 60000)}</span>`);
