@@ -52,11 +52,15 @@ fn demo_workbook() -> String {
 /// Runs as an async command so `blocking_save_file` never executes on the
 /// main thread (it would deadlock there).
 #[tauri::command]
-async fn save_file_dialog(app: AppHandle, request: SaveFileRequest) -> Result<Option<SavedFile>, String> {
+async fn save_file_dialog(
+    app: AppHandle,
+    request: SaveFileRequest,
+) -> Result<Option<SavedFile>, String> {
     let bytes = if let Some(svg) = &request.svg {
         svg.clone().into_bytes()
     } else if let Some(encoded) = &request.base64 {
-        BASE64.decode(encoded)
+        BASE64
+            .decode(encoded)
             .map_err(|e| format!("nieprawidłowe dane do zapisu: {e}"))?
     } else {
         return Err("nothing to save — pass svg or base64".into());
@@ -68,7 +72,11 @@ async fn save_file_dialog(app: AppHandle, request: SaveFileRequest) -> Result<Op
             .and_then(|e| e.to_str())
             .map(|e| e.to_ascii_lowercase())
             .unwrap_or_default();
-        if from_name.is_empty() { vec!["dat".into()] } else { vec![from_name] }
+        if from_name.is_empty() {
+            vec!["dat".into()]
+        } else {
+            vec![from_name]
+        }
     });
     let filter_name = request
         .filter_name
@@ -87,12 +95,15 @@ async fn save_file_dialog(app: AppHandle, request: SaveFileRequest) -> Result<Op
     };
     let path = path.into_path().map_err(|e| e.to_string())?;
     fs::write(&path, &bytes).map_err(|e| format!("nie można zapisać {}: {e}", path.display()))?;
-    Ok(Some(SavedFile { path: path.display().to_string() }))
+    Ok(Some(SavedFile {
+        path: path.display().to_string(),
+    }))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(holidays::HolidaysState::new())

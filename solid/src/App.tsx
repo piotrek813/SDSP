@@ -1,0 +1,57 @@
+import Topbar from "./components/Topbar";
+import Banner from "./components/Banner";
+import Sidebar from "./components/Sidebar";
+import Summary from "./components/Summary";
+import Output from "./components/Output";
+import Gantt from "./components/Gantt";
+import { createStore } from "solid-js/store";
+import MainContext from "./Context";
+import { MainStore } from "./Types";
+
+function App() {
+  const [state, setState] = createStore<MainStore>({
+    fileName: null,
+    // file: null, // the File object — kept so "Reload" can re-read it
+    fileHandle: null, // FileSystemFileHandle — re-reads fresh content even after the file changed on disk
+    isDemo: false,
+    parsed: null, // excel.parseWorkbook result
+    catalog: [], // all codes from the file
+    selected: [], // {code, family, qty, unitMinutes, name} — THE run order
+    mode: "optymalna", // "optymalna" = follow the solver, "manual" = user's order
+    oee: 0.8,
+    startDate: null,
+    startAt: "", // "" = as soon as the calendar allows
+    direction: "forward", // "forward" from start date, "backward" from due date
+    dueDate: null,
+    dueAt: "", // "" = end of the last shift on the due day
+    shifts: [], // {name, start, end} minutes
+    breaks: [],
+    failures: [], // one-off production failures {date, start, end}
+    holidays: [], // full non-working days [{date, name}] from a file
+    holidaysPath: "", // where that file lives (persisted by the Go server)
+    crew: 1, // people working — affects per-piece run time
+    crewFactor: "1", // f(crew): "" or "1" = no time impact; e.g. "1/x"
+    initialFamily: "", // "" = none, "__start__" = matrix start row, else family
+    fixedFirst: "", // "" = free optimisation, else family name
+    showIdeal: false,
+    result: null, // last solve { opt, sched, idealSched, gapMin, notOptimizable }
+    optCache: null, // { key, res } — optimum only changes with setup/inputs
+  });
+
+  return (
+    <MainContext.Provider value={{ state, setState }}>
+      <Topbar />
+      <Banner />
+      <main class="layout" id="view-planner">
+        <Sidebar />
+        <section class="results">
+          <Summary />
+          <Output />
+          <Gantt />
+        </section>
+      </main>
+    </MainContext.Provider>
+  );
+}
+
+export default App;

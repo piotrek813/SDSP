@@ -48,7 +48,9 @@ pub struct HolidaysState {
 
 impl HolidaysState {
     pub fn new() -> Self {
-        Self { cached: Mutex::new(Vec::new()) }
+        Self {
+            cached: Mutex::new(Vec::new()),
+        }
     }
 
     fn cache(&self) -> MutexGuard<'_, Vec<Holiday>> {
@@ -79,7 +81,12 @@ fn payload_ok(path: &str, holidays: Vec<Holiday>, source: Option<&'static str>) 
     }
 }
 
-fn payload_error(path: &str, error: String, holidays: Vec<Holiday>, source: Option<&'static str>) -> HolidaysPayload {
+fn payload_error(
+    path: &str,
+    error: String,
+    holidays: Vec<Holiday>,
+    source: Option<&'static str>,
+) -> HolidaysPayload {
     HolidaysPayload {
         count: holidays.len(),
         holidays,
@@ -128,7 +135,12 @@ fn holidays_payload(app: &AppHandle, state: &HolidaysState, path: &str) -> Holid
         Err(err) => {
             let msg = format!("cannot read file: {err}");
             if !cached.is_empty() {
-                return payload_error(path, format!("{msg} — showing the last known holidays"), cached, Some("saved"));
+                return payload_error(
+                    path,
+                    format!("{msg} — showing the last known holidays"),
+                    cached,
+                    Some("saved"),
+                );
             }
             return payload_error(path, msg, Vec::new(), None);
         }
@@ -144,7 +156,12 @@ fn holidays_payload(app: &AppHandle, state: &HolidaysState, path: &str) -> Holid
         }
         Err(err) => {
             if !cached.is_empty() {
-                return payload_error(path, format!("{err} — showing the last known holidays"), cached, Some("saved"));
+                return payload_error(
+                    path,
+                    format!("{err} — showing the last known holidays"),
+                    cached,
+                    Some("saved"),
+                );
             }
             payload_error(path, err, Vec::new(), None)
         }
@@ -164,7 +181,12 @@ pub fn holidays_load(app: AppHandle, state: State<HolidaysState>, path: String) 
     let mut settings = load_settings(&app);
     settings.holidays_path = path.clone();
     if let Err(err) = save_settings(&app, &settings) {
-        return payload_error(&path, format!("could not save settings: {err}"), Vec::new(), None);
+        return payload_error(
+            &path,
+            format!("could not save settings: {err}"),
+            Vec::new(),
+            None,
+        );
     }
     holidays_payload(&app, state.inner(), &path)
 }
@@ -172,7 +194,11 @@ pub fn holidays_load(app: AppHandle, state: State<HolidaysState>, path: String) 
 /// "Importuj plik…": the browser-parsed holidays are pushed here so they
 /// survive restarts even without a shared path.
 #[tauri::command]
-pub fn holidays_import(app: AppHandle, state: State<HolidaysState>, holidays: Vec<Holiday>) -> HolidaysPayload {
+pub fn holidays_import(
+    app: AppHandle,
+    state: State<HolidaysState>,
+    holidays: Vec<Holiday>,
+) -> HolidaysPayload {
     let holidays = normalize_holidays(holidays);
     let mut settings = load_settings(&app);
     settings.holidays = holidays.clone();
@@ -182,7 +208,12 @@ pub fn holidays_import(app: AppHandle, state: State<HolidaysState>, holidays: Ve
             *state.cache() = holidays.clone();
             payload_ok("", holidays, None)
         }
-        Err(err) => payload_error("", format!("could not save settings: {err}"), Vec::new(), None),
+        Err(err) => payload_error(
+            "",
+            format!("could not save settings: {err}"),
+            Vec::new(),
+            None,
+        ),
     }
 }
 
@@ -320,7 +351,10 @@ pub fn normalize_holidays(list: Vec<Holiday>) -> Vec<Holiday> {
         if !seen.insert(date.clone()) {
             continue;
         }
-        out.push(Holiday { date, name: h.name.trim().to_string() });
+        out.push(Holiday {
+            date,
+            name: h.name.trim().to_string(),
+        });
     }
     out.sort_by(|a, b| a.date.cmp(&b.date));
     out
@@ -337,9 +371,18 @@ mod tests {
         assert_eq!(
             out,
             vec![
-                Holiday { date: "2026-01-01".into(), name: "Nowy Rok".into() },
-                Holiday { date: "2026-04-06".into(), name: "Poniedziałek Wielkanocny".into() },
-                Holiday { date: "2026-05-01".into(), name: String::new() },
+                Holiday {
+                    date: "2026-01-01".into(),
+                    name: "Nowy Rok".into()
+                },
+                Holiday {
+                    date: "2026-04-06".into(),
+                    name: "Poniedziałek Wielkanocny".into()
+                },
+                Holiday {
+                    date: "2026-05-01".into(),
+                    name: String::new()
+                },
             ]
         );
     }
@@ -355,10 +398,22 @@ mod tests {
     #[test]
     fn dedupes_and_sorts() {
         let out = normalize_holidays(vec![
-            Holiday { date: "2026-05-03".into(), name: "Święto Konstytucji".into() },
-            Holiday { date: "2026-05-01".into(), name: "Pierwsze wygrywa".into() },
-            Holiday { date: "01.05.2026".into(), name: "duplikat".into() },
-            Holiday { date: "nie--data".into(), name: "odrzucone".into() },
+            Holiday {
+                date: "2026-05-03".into(),
+                name: "Święto Konstytucji".into(),
+            },
+            Holiday {
+                date: "2026-05-01".into(),
+                name: "Pierwsze wygrywa".into(),
+            },
+            Holiday {
+                date: "01.05.2026".into(),
+                name: "duplikat".into(),
+            },
+            Holiday {
+                date: "nie--data".into(),
+                name: "odrzucone".into(),
+            },
         ]);
         assert_eq!(out.len(), 2);
         assert_eq!(out[0].date, "2026-05-01");
