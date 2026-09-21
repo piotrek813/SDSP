@@ -16,22 +16,26 @@ Sounds better? Alrighty, then let's get started!
 
 ## Uruchomienie
 
-**Windows (użytkownicy nietechniczni):** kliknij dwukrotnie **`start.bat`**. Uruchamia
-`server/sdsp.exe`, który żyje w **zasobniku systemowym** (czerwona ikona), otwiera
-przeglądarkę na `http://127.0.0.1:3000` automatycznie i serwuje aplikację.
-Zamknij planistę z ikony zasobnika (prawy przycisk → *Zakończ*).
+Aplikacja desktopowa (Tauri) — cały interfejs rozmawia z Rust przez komendy
+Tauri (`demo_workbook`, `holidays_*`, `save_file_dialog`); żaden serwer HTTP
+nie jest potrzebny.
 
-- Przebuduj exe po zmianach: uruchom **`server/build.bat`** (wymaga
-  [Go](https://go.dev/dl)). Osadza ikonę (`server/assets/icon.ico`) i info o wersji.
-- Wiersz poleceń: `server/sdsp.exe --port 3000 --no-open --no-tray`.
-
-Podczas rozwoju:
 ```bash
 pnpm install
-pnpm run serve          # http://localhost:5173
-pnpm test               # 39 testów (solver + excel + heldkarp)
-pnpm run benchmark      # benchmark solverów
+pnpm tauri dev           # okno deweloperskie z przeładowaniem
+pnpm tauri build         # pakiety instalacyjne (exe/msi/dmg/deb)
 ```
+
+Podczas rozwoju i testów:
+```bash
+pnpm test                # 39 testów (solver + excel + heldkarp)
+pnpm run benchmark       # benchmark solverów
+```
+
+Plik świąt może leżeć na dysku lokalnym lub w udziale sieciowym — jego ścieżka
+zapisuje się w katalogu konfiguracyjnym aplikacji (`sdsp-settings.json`) i
+wczytuje automatycznie przy każdym uruchomieniu. Eksporty (skoroszyt, SVG,
+PNG) zapisują pliki przez natywne okno „Zapisz jako…”.
 
 ## Format skoroszytu
 

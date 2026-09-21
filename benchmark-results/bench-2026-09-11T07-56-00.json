@@ -1,0 +1,61 @@
+{
+  "meta": {
+    "date": "2026-09-11T07:56:00.108Z",
+    "node": "v24.13.0",
+    "platform": "linux x64",
+    "options": {
+      "MIN_N": 11,
+      "MAX_N": 11,
+      "INSTANCES": 1,
+      "BASE_SEED": 20250101,
+      "budgetSeconds": 15
+    }
+  },
+  "rows": [
+    {
+      "solver": "brute-force",
+      "n": 11,
+      "instance": 0,
+      "seed": 20261101,
+      "setupMinutes": null,
+      "bestKnown": 32,
+      "gapPct": null,
+      "timeMs": null,
+      "medianMs": null,
+      "evaluated": null,
+      "optimal": false,
+      "exact": true,
+      "note": "gave up: Brute force needs 11! permutations (11 families); the limit is 10."
+    },
+    {
+      "solver": "held-karp",
+      "n": 11,
+      "instance": 0,
+      "seed": 20261101,
+      "setupMinutes": 32,
+      "bestKnown": 32,
+      "gapPct": 0,
+      "timeMs": 8.130091999999998,
+      "medianMs": 8.130091999999998,
+      "evaluated": null,
+      "optimal": true,
+      "exact": true,
+      "note": null
+    },
+    {
+      "solver": "greedy+2opt",
+      "n": 11,
+      "instance": 0,
+      "seed": 20261101,
+      "setupMinutes": 32,
+      "bestKnown": 32,
+      "gapPct": 0,
+      "timeMs": 2.1692820000000026,
+      "medianMs": 2.1692820000000026,
+      "evaluated": 661,
+      "optimal": true,
+      "exact": false,
+      "note": null
+    }
+  ]
+}
