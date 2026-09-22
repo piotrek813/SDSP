@@ -1,0 +1,319 @@
+.gantt {
+	width: 100%;
+	min-width: 760px;
+	color: #191919;
+	font-family:
+		"Avenir Next",
+		"Segoe UI",
+		system-ui,
+		sans-serif;
+	background: #fff;
+	font-size: 12px;
+}
+
+.gantt__header {
+	padding-bottom: 8px;
+}
+
+.gantt__title {
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+.gantt__subtitle {
+	margin-top: 3px;
+	font-size: 10px;
+	color: #60606c;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Main layout                                                                 */
+/* -------------------------------------------------------------------------- */
+
+.gantt__body {
+	position: relative;
+}
+
+.gantt__axis {
+	position: relative;
+	height: 43px;
+	margin-left: var(--label-w);
+}
+
+.gantt__axis-labels {
+	position: relative;
+	height: 100%;
+}
+
+.gantt__day-label {
+	position: absolute;
+	bottom: 16px;
+	white-space: nowrap;
+	color: #60606c;
+	font-size: 9.5px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	transform: translateX(0);
+}
+
+.gantt__hour-label {
+	position: absolute;
+	bottom: 2px;
+	white-space: nowrap;
+	color: #9a9aa4;
+	font-size: 9px;
+	transform: translateX(3px);
+}
+
+.gantt__plot {
+	position: relative;
+	margin-left: var(--label-w);
+}
+
+.gantt__background {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	overflow: hidden;
+}
+
+.gantt__day-line,
+.gantt__hour-line {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	pointer-events: none;
+}
+
+.gantt__day-line {
+	border-left: 1.2px dashed #d9d9df;
+}
+
+.gantt__hour-line {
+	border-left: 1px solid #ececf0;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Background intervals                                                        */
+/* -------------------------------------------------------------------------- */
+
+.gantt__band {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	pointer-events: auto;
+}
+
+.gantt__band--off {
+	background: #f5f5f7;
+}
+
+.gantt__band--holiday {
+	background: #fdeaea;
+	border-left: 1px solid #f3b0b8;
+	border-right: 1px solid #f3b0b8;
+}
+
+.gantt__band--break {
+	background:
+		repeating-linear-gradient(135deg,
+			#f3efe7 0,
+			#f3efe7 4px,
+			#d5d5db 4px,
+			#d5d5db 5.5px);
+}
+
+.gantt__band--failure {
+	background:
+		repeating-linear-gradient(135deg,
+			#fdeaea 0,
+			#fdeaea 4px,
+			#ed071b 4px,
+			#ed071b 5.5px);
+	border-left: 1px solid #ed071b;
+	border-right: 1px solid #ed071b;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Rows                                                                        */
+/* -------------------------------------------------------------------------- */
+
+.gantt__rows {
+	position: relative;
+}
+
+.gantt__row {
+	position: relative;
+	display: flex;
+	height: 30px;
+	margin-bottom: 0;
+}
+
+.gantt__row--alternate {
+	background: #fafafc;
+}
+
+.gantt__row-label {
+	position: absolute;
+	left: calc(var(--label-w) * -1);
+	top: 0;
+	width: var(--label-w);
+	height: 100%;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	padding-left: 16px;
+	background: inherit;
+}
+
+.gantt__family-chip {
+	width: 8px;
+	height: 12px;
+	flex: 0 0 auto;
+	border-radius: 2px;
+	margin-right: 6px;
+}
+
+.gantt__row-text {
+	min-width: 0;
+}
+
+.gantt__code {
+	font-size: 11.5px;
+	font-weight: 600;
+	line-height: 14px;
+}
+
+.gantt__meta {
+	color: #60606c;
+	font-size: 9.5px;
+	line-height: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-wrap: nowrap;
+}
+
+.gantt__row-track {
+	position: relative;
+	width: 100%;
+	height: 30px;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Bars                                                                        */
+/* -------------------------------------------------------------------------- */
+
+.gantt__bar {
+	position: absolute;
+	top: 3px;
+	height: 24px;
+	min-width: 1.5px;
+	box-sizing: border-box;
+	border-radius: 3px;
+	overflow: hidden;
+	z-index: 3;
+}
+
+.gantt__bar--setup {
+	background: #fff7f7;
+	border: 1px solid #ed071b;
+	color: #b00514;
+}
+
+.gantt__bar--run {
+	background: #5b7d9e;
+	color: #fff;
+	opacity: 0.9;
+}
+
+.gantt__bar-label {
+	position: absolute;
+	left: 6px;
+	top: 50%;
+	transform: translateY(-50%);
+	white-space: nowrap;
+	pointer-events: none;
+	font-size: 9.5px;
+	font-weight: 600;
+}
+
+.gantt__bar--setup .gantt__bar-label {
+	color: #b00514;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Start time                                                                  */
+/* -------------------------------------------------------------------------- */
+
+.gantt__start-time,
+.gantt__start-time--fallback {
+	position: absolute;
+	top: 50%;
+	z-index: 2;
+	transform: translateY(-50%);
+	color: #60606c;
+	font-size: 9.5px;
+	white-space: nowrap;
+}
+
+.gantt__start-time {
+	text-align: right;
+}
+
+.gantt__start-time--fallback {
+	display: none;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Ideal / OEE 100% ghost bars                                                 */
+/* -------------------------------------------------------------------------- */
+
+.gantt__ideal-bar {
+	position: absolute;
+	top: 1px;
+	height: 36px;
+	box-sizing: border-box;
+	border: 1.4px dashed #9aa54f;
+	border-radius: 3px;
+	pointer-events: none;
+	z-index: 1;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Current time                                                                */
+/* -------------------------------------------------------------------------- */
+
+.gantt__now {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 0;
+	z-index: 20;
+	pointer-events: none;
+	border-left: 1.6px solid #191919;
+}
+
+.gantt__now-label {
+	position: absolute;
+	top: -4px;
+	left: 0;
+	transform: translate(-50%, -100%);
+	padding: 0 2px;
+	color: #191919;
+	background: #fff;
+	font-size: 9.5px;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.gantt__now--hidden {
+	display: none;
+}

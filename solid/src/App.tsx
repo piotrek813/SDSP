@@ -3,10 +3,11 @@ import Banner from "./components/Banner";
 import Sidebar from "./components/Sidebar";
 import Summary from "./components/Summary";
 import Output from "./components/Output";
-import Gantt from "./components/Gantt";
 import { createStore } from "solid-js/store";
+
 import MainContext from "./Context";
 import { MainStore } from "./Types";
+import GanttView from "./components/Gantt/GanttView";
 
 function App() {
   const [state, setState] = createStore<MainStore>({
@@ -47,7 +48,7 @@ function App() {
         <section class="results">
           <Summary />
           <Output />
-          <Gantt />
+          <GanttView />
         </section>
       </main>
     </MainContext.Provider>

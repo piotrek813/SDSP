@@ -11,6 +11,10 @@
     "dialog:default",
     "fs:default",
     "fs:allow-open",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "**/*" }]
+    },
     "fs:allow-fstat",
     "fs:allow-read"
   ]

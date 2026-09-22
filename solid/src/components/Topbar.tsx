@@ -1,8 +1,7 @@
-import { useContext } from "solid-js";
 import BrandLogo from "../assets/logo.svg";
 import { open } from "@tauri-apps/plugin-dialog";
 import { open as fsOpen } from "@tauri-apps/plugin-fs";
-import MainContext from "../Context";
+import { useMainStore } from "../Context";
 import { parseWorkbookFromBuffer } from "../services/excel";
 import { SetStoreFunction } from "solid-js/store";
 import { MainStore } from "../Types";
@@ -10,6 +9,7 @@ import { normalizeOee } from "../services/solver-bruteforce";
 import { clearBanner } from "./Banner";
 import { defaultStartDate } from "../utils/dates";
 import { basename } from "../utils/path";
+import { onMount } from "solid-js";
 
 function applyParsed(
   setState: SetStoreFunction<MainStore>,
@@ -80,7 +80,21 @@ function applyParsed(
 }
 
 export default function () {
-  const { setState } = useContext(MainContext);
+  const { state, setState } = useMainStore();
+
+  onMount(async () => {
+    const filePath = "/home/p/Downloads/CS-plan-20260915-1522.xlsx";
+    const handle = await fsOpen(filePath, { read: true });
+
+    const stat = await handle.stat();
+    const buf = new Uint8Array(stat.size);
+    await handle.read(buf);
+
+    const parsed = parseWorkbookFromBuffer(buf);
+
+    applyParsed(setState, parsed, basename(filePath));
+    console.log(state);
+  });
 
   async function openWorkbook() {
     const filePath = await open({
@@ -88,6 +102,7 @@ export default function () {
       directory: false,
       extensions: [".xlsx", ".xlsm"],
     });
+    console.log(filePath);
 
     if (filePath === null) {
       return;
