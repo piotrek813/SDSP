@@ -167,7 +167,7 @@ export type MainStore = {
   breaks: Break[];
   failures: Failure[]; // one-off production failures {date, start, end}
   holidays: Holiday[]; // full non-working days [{date, name}] from a file
-  holidaysPath: ""; // where that file lives (persisted by the Go server)
+  holidaysPath: string; // where that file lives (persisted by the Go server)
   crew: 1; // people working — affects per-piece run time
   crewFactor: "1"; // f(crew): "" or "1" = no time impact; e.g. "1/x"
   initialFamily: ""; // "" = none, "__start__" = matrix start row, else family
