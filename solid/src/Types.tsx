@@ -12,7 +12,7 @@ export type Product = {
   unitMinutes: number;
   name: string;
   qty: number;
-  produced: boolean;
+  produced: number;
   defaultQty?: number;
 };
 
@@ -28,19 +28,6 @@ export type Shift = {
 export type Holiday = {
   date: string; // ISO
   name?: string;
-};
-
-export type CodeRow = {
-  id: string;
-  code: string;
-  family: string;
-  qty: number;
-  /** ideal time for ONE piece with one worker, in minutes */
-  unitMinutes: number;
-  /** pieces actually created (filled by the supervisor) */
-  produced?: number;
-  name?: string;
-  defaultQty?: number | null;
 };
 
 export type WorkInterval = {
@@ -73,7 +60,7 @@ export type ScheduleContext = {
   /** what the machine ran last; null = no initial changeover */
   initialFamily: string | null;
   calendar: CalendarConfig;
-  codes: CodeRow[];
+  codes: Product[];
   /** 0..1 */
   oee: number;
 };
@@ -93,8 +80,8 @@ export type ScheduleRow = {
 
 export type ScheduleResult = {
   rows: ScheduleRow[];
-  start: Date | null;
-  end: Date | null;
+  start: Date;
+  end: Date;
   setupMinutes: number;
   runMinutes: number;
 };
@@ -171,12 +158,12 @@ export type MainStore = {
   selected: Product[]; // {code, family, qty, unitMinutes, name} — THE run order
   mode: "optymalna" | "manual"; // "optymalna" = follow the solver, "manual" = user's order
   oee: number;
-  startDate: string | null;
-  startAt: ""; // "" = as soon as the calendar allows
+  startDate: string;
+  startAt: string; // "" = as soon as the calendar allows
   direction: PlanningDirection;
-  dueDate: null;
-  dueAt: ""; // "" = end of the last shift on the due day
-  shifts: []; // {name, start, end} minutes
+  dueDate: string;
+  dueAt: string; // "" = end of the last shift on the due day
+  shifts: Shift[]; // {name, start, end} minutes
   breaks: Break[];
   failures: Failure[]; // one-off production failures {date, start, end}
   holidays: Holiday[]; // full non-working days [{date, name}] from a file

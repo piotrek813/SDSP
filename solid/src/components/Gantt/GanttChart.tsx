@@ -259,6 +259,7 @@ export default function Gantt(props: GanttProps) {
                       {firstSeg && (
                         <div
                           class="gantt__start-time"
+                          hidden={rows().length === 1}
                           style={{
                             left: `${xPercentValue}%`,
                             transform: timeTransform,

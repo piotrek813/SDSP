@@ -4,10 +4,11 @@ import Sidebar from "./components/Sidebar";
 import Summary from "./components/Summary";
 import Output from "./components/Output";
 import { createStore } from "solid-js/store";
-
 import MainContext from "./Context";
 import { MainStore } from "./Types";
+import { ScheduleProvider } from "./Schedule";
 import GanttView from "./components/Gantt/GanttView";
+import { todayStr } from "./utils/dates";
 
 function App() {
   const [state, setState] = createStore<MainStore>({
@@ -20,10 +21,10 @@ function App() {
     selected: [], // {code, family, qty, unitMinutes, name} — THE run order
     mode: "optymalna", // "optymalna" = follow the solver, "manual" = user's order
     oee: 0.8,
-    startDate: null,
+    startDate: todayStr(),
     startAt: "", // "" = as soon as the calendar allows
     direction: "forward", // "forward" from start date, "backward" from due date
-    dueDate: null,
+    dueDate: todayStr(),
     dueAt: "", // "" = end of the last shift on the due day
     shifts: [], // {name, start, end} minutes
     breaks: [],
@@ -46,9 +47,11 @@ function App() {
       <main class="layout" id="view-planner">
         <Sidebar />
         <section class="results">
-          <Summary />
-          <Output />
-          <GanttView />
+          <ScheduleProvider>
+            <Summary />
+            <Output />
+            <GanttView />
+          </ScheduleProvider>
         </section>
       </main>
     </MainContext.Provider>

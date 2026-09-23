@@ -1,4 +1,8 @@
+import { useMainStore } from "../Context";
+
 export default function () {
+  const { state, setState } = useMainStore();
+
   return (
     <section class="panel" data-views="planner">
       <h2>Wydajność (ta sesja)</h2>
@@ -21,7 +25,10 @@ export default function () {
           min="40"
           max="100"
           step="1"
-          value="80"
+          value={state.oee}
+          onChange={(evt) => {
+            setState("oee", Number(evt.currentTarget.value));
+          }}
           aria-label="OEE w procentach"
         />
         <span class="oee-numwrap">

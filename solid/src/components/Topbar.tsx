@@ -126,7 +126,14 @@ export default function () {
         <span class="brand-sub">Adamiecki — planowanie sekwencji</span>
       </div>
       <div class="topbar-actions">
-        <select id="view-select" class="view-select" title="Widok planisty">
+        <select
+          id="view-select"
+          class="view-select"
+          title="Widok planisty"
+          onChange={(evt) => {
+            document.body.dataset.view = evt.target.value;
+          }}
+        >
           <option value="planner">Widok planisty</option>
           <option value="production">Widok produkcji</option>
         </select>

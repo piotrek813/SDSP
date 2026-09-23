@@ -43,12 +43,7 @@
  * ---------------------------------------------------------------------------
  */
 
-import {
-  CalendarConfig,
-  Product,
-  ScheduleContext,
-  ScheduleRow,
-} from "../Types";
+import { Product } from "../Types";
 import { Ctx } from "./ctx";
 
 export const MAX_FAMILIES = 10;
@@ -56,9 +51,10 @@ export const MAX_FAMILIES = 10;
 /* ------------------------------------------------------------------ time -- */
 
 /** "6:00" | "06:00" | 0.25 (Excel time) | 360 (minutes) | Date -> minutes. */
-export function parseTimeToMinutes(value: Date | string | number) {
+export function parseTimeToMinutes(value) {
+  if (value == null) return null;
   if (value instanceof Date) {
-    if (isNaN(value.getTime())) throw Error("parseTimeToMinutes invalid date");
+    if (isNaN(value)) return null;
     return value.getHours() * 60 + value.getMinutes();
   }
   if (typeof value === "number" && isFinite(value)) {
@@ -75,17 +71,14 @@ export function parseTimeToMinutes(value: Date | string | number) {
   const m = String(value)
     .trim()
     .match(/^(\d{1,2})[:.](\d{2})(?::(\d{2}))?$/);
-  if (!m) throw Error("Invalid date format. String date should be HH:MM");
+  if (!m) return null;
   const h = +m[1],
     min = +m[2];
-  if (h > 24 || min > 59)
-    throw Error(
-      "parseTimeToMinutes. Invalid time format HH:MM HH > 24 or MM > 59",
-    );
+  if (h > 24 || min > 59) return null;
   return (h * 60 + min) % (24 * 60);
 }
 
-export function minutesToHM(min: number) {
+export function minutesToHM(min) {
   const m = ((Math.round(min) % 1440) + 1440) % 1440;
   return (
     String(Math.floor(m / 60)).padStart(2, "0") +
@@ -95,11 +88,11 @@ export function minutesToHM(min: number) {
 }
 
 /** OEE only dilutes production time: ideal 10 min at 80% -> 12.5 min. */
-export function effectiveUnitMinutes(unitMinutes: number, oee: number) {
+export function effectiveUnitMinutes(unitMinutes, oee) {
   return unitMinutes / normalizeOee(oee);
 }
 
-export function normalizeOee(oee: number) {
+export function normalizeOee(oee) {
   let o = Number(oee);
   if (!isFinite(o) || o <= 0) o = 1;
   if (o > 1) o = o / 100; // people type 80 meaning 80%
@@ -109,7 +102,7 @@ export function normalizeOee(oee: number) {
 /* --------------------------------------------------------------- problem -- */
 
 /** Families in first-appearance order across the selected codes. */
-export function familyList(codes: Product[]) {
+export function familyList(codes) {
   const out = [],
     seen = new Set();
   for (const c of codes || []) {
@@ -121,14 +114,14 @@ export function familyList(codes: Product[]) {
   return out;
 }
 
-export function setupBetween(ctx: Ctx, from: string | null, to: string | null) {
+export function setupBetween(ctx, from, to) {
   if (from == null || to == null) return 0;
   const v = ctx.setup && ctx.setup[`${from}>${to}`];
   return Number.isFinite(+v) ? +v : 0;
 }
 
 /** Total setup minutes charged by walking `sequence` (incl. initial setup). */
-export function sequenceSetupMinutes(ctx: Ctx, sequence: string[]) {
+export function sequenceSetupMinutes(ctx, sequence) {
   let total = 0,
     prev = ctx.initialFamily || null;
   for (const fam of sequence) {
@@ -146,7 +139,7 @@ export function sequenceSetupMinutes(ctx: Ctx, sequence: string[]) {
  * must never silently change the plan.
  * Parsed with a tiny recursive-descent parser — no eval.
  */
-export function compileCrewFactor(spec: any) {
+export function compileCrewFactor(spec) {
   if (spec == null || spec === "" || spec === 1) return () => 1;
   if (typeof spec === "number") {
     if (!isFinite(spec) || spec <= 0) return () => 1;
@@ -185,7 +178,7 @@ export function compileCrewFactor(spec: any) {
     }
     return fn;
   }
-  function factor(): (x: number) => number {
+  function factor() {
     const t = next();
     if (t === "x") return (x) => x;
     if (t === "(") {
@@ -208,14 +201,14 @@ export function compileCrewFactor(spec: any) {
   const fn = expr();
   if (pos !== tokens.length)
     throw new Error(`Cannot parse crew factor "${spec}"`);
-  return (x: number) => {
+  return (x) => {
     const v = fn(Number(x) || 1);
     return isFinite(v) && v > 0 ? v : 1 / (Number(x) || 1); // sane fallback
   };
 }
 
 /** Ideal production minutes for the whole plan (OEE-independent). */
-export function idealRunMinutes(codes: Product[]) {
+export function idealRunMinutes(codes) {
   return (codes || []).reduce((s, c) => s + (c.qty * c.unitMinutes || 0), 0);
 }
 
@@ -230,13 +223,7 @@ export function idealRunMinutes(codes: Product[]) {
  * then optimises the rest, and the UI can expose the price of that constraint
  * by comparing against the free optimum.
  */
-type SolverOptions = {
-  fixedFirst?: string;
-};
-export function solveBruteForce(
-  ctx: ScheduleContext,
-  opts: SolverOptions = {},
-) {
+export function solveBruteForce(ctx, opts = {}) {
   const codes = ctx.codes || [];
   const families = familyList(codes);
   const n = families.length;
@@ -254,6 +241,7 @@ export function solveBruteForce(
     const err = new Error(
       `Brute force needs ${n}! permutations (${n} families); the limit is ${MAX_FAMILIES}.`,
     );
+    err.code = "TOO_MANY_FAMILIES";
     throw err;
   }
 
@@ -264,18 +252,18 @@ export function solveBruteForce(
   const rest = families.filter((f) => f !== fixedFirst);
   const t0 = Date.now();
 
-  let best: { sequence: string[]; setupMinutes: number } | null = null;
-  let bestKey: string | null = null;
+  let best = null;
+  let bestKey = null;
   let evaluated = 0;
 
-  const consider = (seq: string[]) => {
+  const consider = (seq) => {
     evaluated++;
     const setup = sequenceSetupMinutes(ctx, seq);
     const key = seq.join(">");
     if (
       best === null ||
       setup < best.setupMinutes ||
-      (setup === best.setupMinutes && key < bestKey!) // deterministic tie-break
+      (setup === best.setupMinutes && key < bestKey) // deterministic tie-break
     ) {
       best = { sequence: seq.slice(), setupMinutes: setup };
       bestKey = key;
@@ -304,8 +292,8 @@ export function solveBruteForce(
   }
 
   return {
-    sequence: best!.sequence,
-    setupMinutes: best!.setupMinutes,
+    sequence: best.sequence,
+    setupMinutes: best.setupMinutes,
     runMinutes: idealRunMinutes(codes),
     evaluated,
     elapsedMs: Date.now() - t0,
@@ -317,7 +305,7 @@ export function solveBruteForce(
 
 const DAY_MS = 86400000;
 
-function dateAtTime(baseDate: Date, dayOffset: number, minutes: number) {
+function dateAtTime(baseDate, dayOffset, minutes) {
   const d = new Date(baseDate.getTime() + dayOffset * DAY_MS);
   d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
   return d;
@@ -336,7 +324,7 @@ function dateAtTime(baseDate: Date, dayOffset: number, minutes: number) {
  * typically loaded from a file via the desktop server) — no work is placed on
  * those days at all.
  */
-export function expandWorkIntervals(calendar: CalendarConfig, days: number) {
+export function expandWorkIntervals(calendar, days) {
   const shifts = (calendar.shifts || [])
     .map((s) => ({
       ...s,
@@ -364,7 +352,7 @@ export function expandWorkIntervals(calendar: CalendarConfig, days: number) {
     .filter(Boolean);
 
   const base = new Date(calendar.startDate + "T00:00:00");
-  const raw: Date[][] = [];
+  const raw = [];
 
   // full non-working days (holidays)
   const holidaySet = new Set(
@@ -373,7 +361,7 @@ export function expandWorkIntervals(calendar: CalendarConfig, days: number) {
       .filter(Boolean),
   );
 
-  const subtractWindow = (segs: Date[][], ws: Date, we: Date) => {
+  const subtractWindow = (segs, ws, we) => {
     const next = [];
     for (const [s0, s1] of segs) {
       if (we <= s0 || ws >= s1) {
@@ -406,7 +394,7 @@ export function expandWorkIntervals(calendar: CalendarConfig, days: number) {
         segs = subtractWindow(segs, bs, be);
       }
       // … and any one-off failure windows overlapping this shift
-      for (const [fs, fe] of failures ?? []) {
+      for (const [fs, fe] of failures) {
         if (fe <= start || fs >= end) continue;
         segs = subtractWindow(segs, fs, fe);
       }
@@ -415,10 +403,7 @@ export function expandWorkIntervals(calendar: CalendarConfig, days: number) {
   }
 
   // merge touching/overlapping intervals
-  raw.sort(
-    (x, y) =>
-      x[0].getTime() - y[0].getTime() || x[1].getTime() - y[1].getTime(),
-  );
+  raw.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
   const out = [];
   for (const seg of raw) {
     const last = out[out.length - 1];
@@ -436,7 +421,7 @@ export function expandWorkIntervals(calendar: CalendarConfig, days: number) {
  * sharing a family. Families without codes are skipped (they would otherwise
  * consume calendar time without producing a row).
  */
-export function visitsFromSequence(ctx: Ctx, sequence: string[]): Visit[] {
+export function visitsFromSequence(ctx: Ctx, sequence: string[]) {
   const codes = ctx.codes || [];
   const visits = [];
   for (const fam of sequence || []) {
@@ -446,18 +431,13 @@ export function visitsFromSequence(ctx: Ctx, sequence: string[]): Visit[] {
   return visits;
 }
 
-type Visit = {
-  family: string;
-  codes: Product[];
-};
-
 /**
  * Collapse an explicit code order (the user's queue) into visits. Consecutive
  * codes of the same family merge into one visit; every family change starts a
  * new one and charges its changeover — this is what makes hand-mixing
  * suboptimal, and possible.
  */
-export function visitsFromCodeOrder(_: Ctx, orderedCodes: Product[]) {
+export function visitsFromCodeOrder(ctx: Ctx, orderedCodes: Product[]) {
   const visits = [];
   for (const c of orderedCodes || []) {
     if (!c || c.family == null) continue;
@@ -485,7 +465,7 @@ export function visitsFromCodeOrder(_: Ctx, orderedCodes: Product[]) {
  *   rows[i] = { code, family, qty, unitIdeal, unitEffective, setupFrom,
  *               setupSegments: [{start,end}], runSegments: [{start,end}] }
  */
-function scheduleFromVisits(ctx: Ctx, visits: Visit[]) {
+function scheduleFromVisits(ctx: Ctx, visits) {
   const calendar = ctx.calendar || {};
   const engine =
     calendar.direction === "backward"
@@ -521,7 +501,7 @@ function scheduleMetrics(rows: ScheduleRow[]) {
   };
 }
 
-function forwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
+function forwardScheduleFromVisits(ctx: Ctx, visits) {
   const calendar = ctx.calendar || {};
   const oee = normalizeOee(ctx.oee);
   const maxDays = calendar.maxDays || 400;
@@ -547,7 +527,7 @@ function forwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
 
   let intervalIdx = 0;
 
-  const take = (minutesNeeded: number, sink: Interval[]) => {
+  const take = (minutesNeeded, sink) => {
     let remaining = minutesNeeded;
     let guard = 0;
     while (remaining > 1e-9) {
@@ -583,18 +563,18 @@ function forwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
     }
   };
 
-  const rows: ScheduleRow[] = [];
+  const rows = [];
   let prevFamily = ctx.initialFamily || null;
 
   for (const visit of visits) {
     const fam = visit.family;
 
     const setupMin = setupBetween(ctx, prevFamily, fam);
-    const setupSegments: Interval[] = [];
+    const setupSegments = [];
     if (setupMin > 0) take(setupMin, setupSegments);
 
     visit.codes.forEach((c, idx) => {
-      const runSegments: Interval[] = [];
+      const runSegments = [];
       const unitEffective =
         effectiveUnitMinutes(c.unitMinutes, oee) * crewF(crew);
       const minutes = (c.qty || 0) * unitEffective;
@@ -616,7 +596,7 @@ function forwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
   return scheduleMetrics(rows);
 }
 
-function backwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
+function backwardScheduleFromVisits(ctx: Ctx, visits: Product[]) {
   const calendar = ctx.calendar || {};
   const oee = normalizeOee(ctx.oee);
   const crew = Math.max(1, Math.round(Number(calendar.crew) || 1));
@@ -626,7 +606,7 @@ function backwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
   const dueBase = new Date(calendar.dueDate + "T00:00:00");
   const backDays = Math.min(calendar.maxDays || 400, 360);
 
-  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const pad2 = (n) => String(n).padStart(2, "0");
   const origin = new Date(dueBase.getTime() - backDays * DAY_MS);
   const originStr = `${origin.getFullYear()}-${pad2(origin.getMonth() + 1)}-${pad2(origin.getDate())}`;
 
@@ -664,7 +644,7 @@ function backwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
   const reversed = intervals.slice().reverse();
   let idx = 0;
 
-  const takeBack = (minutesNeeded: number, sink: Interval[]) => {
+  const takeBack = (minutesNeeded, sink) => {
     let remaining = minutesNeeded;
     let guard = 0;
     while (remaining > 1e-9) {
@@ -701,7 +681,7 @@ function backwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
   for (let i = visits.length - 1; i >= 0; i--) {
     const visit = visits[i];
     for (const c of visit.codes.slice().reverse()) {
-      const runSegments: Interval[] = [];
+      const runSegments = [];
       const minutes =
         (c.qty || 0) * effectiveUnitMinutes(c.unitMinutes, oee) * crewF(crew);
       if (minutes > 0) takeBack(minutes, runSegments);
@@ -712,17 +692,17 @@ function backwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
       i > 0 ? visits[i - 1].family : ctx.initialFamily || null,
       visit.family,
     );
-    const setupSegments: Interval[] = [];
+    const setupSegments = [];
     if (setupMin > 0) takeBack(setupMin, setupSegments);
     setupByVisit.set(visit, setupSegments);
   }
 
   // assemble rows in chronological order, segments back to chronological
-  const rows: ScheduleRow[] = [];
+  const rows = [];
   let prevFamily = ctx.initialFamily || null;
   for (const visit of visits) {
     const setupSegments = (setupByVisit.get(visit) || []).slice().reverse();
-    visit.codes.forEach((c: Product, idx: number) => {
+    visit.codes.forEach((c, idx) => {
       const unitEffective =
         effectiveUnitMinutes(c.unitMinutes, oee) * crewF(crew);
       rows.push({
@@ -743,7 +723,7 @@ function backwardScheduleFromVisits(ctx: Ctx, visits: Visit[]) {
 }
 
 /** Schedule for a solver family sequence (codes within a family keep file order). */
-export function buildSchedule(ctx: Ctx, sequence: string[]) {
+export function buildSchedule(ctx: Ctx, sequence) {
   return scheduleFromVisits(ctx, visitsFromSequence(ctx, sequence));
 }
 

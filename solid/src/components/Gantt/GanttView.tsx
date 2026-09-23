@@ -1,14 +1,12 @@
 import { createMemo, Show } from "solid-js";
 import { useMainStore } from "../../Context";
-import {
-  buildScheduleFromCodeOrder,
-  expandWorkIntervals,
-} from "../../services/solver-bruteforce";
+import { expandWorkIntervals } from "../../services/solver-bruteforce";
 import { MainStore } from "../../Types";
-import { fmtDur, fmtHM, todayStr, toLocalDateStr } from "../../utils/dates";
+import { fmtDur, fmtHM, toLocalDateStr } from "../../utils/dates";
 import GanttChart from "../Gantt/GanttChart";
 import Legend from "./Legend";
 import { familyColors } from "../../utils/colors";
+import { useSchedule } from "../../Schedule";
 
 function expandHolidayIntervals(state: MainStore, sched: Schedule) {
   if (!sched.start || !sched.end) return [];
@@ -110,53 +108,13 @@ function computeOffIntervals(
   return off.filter((o) => o.end.getTime() > o.start.getTime());
 }
 
-function buildCtx(state: MainStore) {
-  return {
-    setup: state.parsed ? state.parsed.setup : {},
-    initialFamily: state.initialFamily || null,
-    calendar: {
-      direction: state.direction,
-      startDate: state.startDate || todayStr(),
-      startAt: state.startAt || null,
-      dueDate:
-        state.direction === "backward"
-          ? state.dueDate || state.startDate || todayStr()
-          : null,
-      dueAt: state.direction === "backward" ? state.dueAt || null : null,
-      shifts: state.shifts,
-      breaks: state.breaks,
-      failures: state.failures,
-      holidays: state.holidays,
-      crew: state.crew,
-      crewFactor: state.crewFactor,
-      maxDays: 400,
-    },
-    codes: state.selected.map((s) => ({
-      id: s.code,
-      code: s.code,
-      family: s.family,
-      qty: s.qty,
-      unitMinutes: s.unitMinutes,
-    })),
-    oee: state.oee,
-  };
-}
-
 export default function () {
   const { state } = useMainStore();
+  const { schedule, idealSchedule } = useSchedule();
 
   const colors = createMemo(() =>
     familyColors(state.parsed ? state.parsed.families : []),
   );
-
-  const ctx = createMemo(() => {
-    return buildCtx(state);
-  });
-
-  const schedule = createMemo(() => {
-    const sched = buildScheduleFromCodeOrder(ctx(), state.selected);
-    return sched;
-  });
 
   const fails = createMemo(() => {
     return expandFailureIntervals(state, schedule());
@@ -176,12 +134,6 @@ export default function () {
     }
 
     return new Date(Math.max(...fails().map((f) => f.end.getTime())));
-  });
-
-  const idealSchedule = createMemo(() => {
-    return state.showIdeal
-      ? buildScheduleFromCodeOrder({ ...ctx(), oee: 1 }, state.selected)
-      : null;
   });
 
   const off = createMemo(() => {
