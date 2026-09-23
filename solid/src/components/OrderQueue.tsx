@@ -1,26 +1,34 @@
-import { For, Show } from "solid-js";
+import { batch, createSignal, For, Show } from "solid-js";
 import { useMainStore } from "../Context";
 import { produce } from "solid-js/store";
 
 export default function () {
   const { state, setState } = useMainStore();
+  const [dragFromIndex, setDragFromIndex] = createSignal<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = createSignal<number | null>(null);
 
-  function move([i, dir]: [number, -1 | 1]) {
-    // TODO fix this
-    // TODO add drag n drop
+  function move([code, dir]: [string, -1 | 1]) {
     setState(
       "selected",
       produce((selected) => {
-        const [item] = selected.splice(i, 1);
-        return selected.splice(i + dir, 0, item);
+        const idx = selected.findIndex((e) => e.code === code);
+
+        if (idx === -1) return;
+
+        const nextIdx = idx + dir;
+
+        if (nextIdx < 0 || nextIdx >= selected.length) return;
+
+        [selected[idx], selected[nextIdx]] = [selected[nextIdx], selected[idx]];
       }),
     );
   }
 
-  function handleQuantityChange(idx: number, evt: any) {
+  function handleQuantityChange(code: string, evt: any) {
+    console.log(code);
     setState(
       "selected",
-      idx,
+      (e) => e.code === code,
       "qty",
       Math.max(0, Math.round(evt.currentTarget.value || 0)),
     );
@@ -63,53 +71,129 @@ export default function () {
       >
         <ul id="selected-list" class="queue-list">
           <For each={state.selected}>
-            {(selected, idx) => (
-              <li
-                classList={{
-                  "queue-row": true,
-                  changeover:
-                    idx() > 0 &&
-                    state.selected[idx() - 1].family !== selected.family,
-                }}
-                draggable="true"
-                // title="starts a new WYROBY ZE ZWYKŁĄ FLANGĄ 1 block (0 min changeover)"
-              >
-                <span class="queue-grip" title="Drag to reorder">
-                  ⋮⋮
-                </span>
-                <button
-                  class="icon-btn"
-                  title="Move earlier"
-                  disabled={idx() === 0}
-                  onClick={[move, [idx(), 1]]}
+            {(selected, idx) => {
+              return (
+                <li
+                  classList={{
+                    "queue-row": true,
+                    changeover:
+                      idx() > 0 &&
+                      state.selected[idx() - 1].family !== selected.family,
+                    dragging: idx() === dragFromIndex(),
+                    "drop-target-top":
+                      dragOverIndex() !== null &&
+                      dragFromIndex() !== null &&
+                      dragOverIndex()! === idx() &&
+                      dragFromIndex() !== idx() &&
+                      dragFromIndex()! > idx(),
+                    "drop-target-bottom":
+                      dragOverIndex() !== null &&
+                      dragFromIndex() !== null &&
+                      dragOverIndex()! === idx() &&
+                      dragFromIndex() !== idx() &&
+                      dragFromIndex()! < idx(),
+                  }}
+                  draggable="true"
+                  // title="starts a new WYROBY ZE ZWYKŁĄ FLANGĄ 1 block (0 min changeover)"
+                  on:dragover={(evt) => {
+                    evt.preventDefault();
+                    setDragOverIndex(idx());
+                  }}
+                  on:dragleave={() => {
+                    setDragOverIndex(null);
+                  }}
+                  on:drop={(evt: any) => {
+                    evt.preventDefault();
+
+                    evt.preventDefault();
+                    const dragFromIndexValue = dragFromIndex();
+                    if (
+                      dragFromIndexValue === null ||
+                      dragFromIndexValue === idx()
+                    )
+                      return;
+                    batch(() => {
+                      setState(
+                        "selected",
+                        produce((selected) => {
+                          const from = dragFromIndex();
+                          const to = dragOverIndex();
+
+                          if (from === null) return;
+                          if (to === null) return;
+
+                          [selected[from], selected[to]] = [
+                            selected[to],
+                            selected[from],
+                          ];
+                          return selected;
+                        }),
+                      );
+                      setDragFromIndex(null);
+                      setDragOverIndex(null);
+                    });
+                  }}
+                  on:dragend={() => {
+                    setDragFromIndex(null);
+                  }}
+                  on:dragstart={(evt: any) => {
+                    setDragFromIndex(idx());
+                    if (evt.dataTransfer) {
+                      evt.dataTransfer.effectAllowed = "move";
+                      try {
+                        evt.dataTransfer.setData("text/plain", String(idx()));
+                      } catch {
+                        /* older engines */
+                      }
+                    }
+                  }}
                 >
-                  ↑
-                </button>
-                <button
-                  class="icon-btn"
-                  title="Move later"
-                  disabled={idx() === state.selected.length - 1}
-                  onClick={[move, [idx(), -1]]}
-                >
-                  ↓
-                </button>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  title="Quantity"
-                  value={selected.qty}
-                  onChange={[handleQuantityChange, idx()]}
-                />
-                <div class="queue-code-family-wrapper">
-                  <span class="queue-name">{selected.code}</span>
-                  <span class="queue-family">{selected.family}</span>
-                </div>
-                <button class="icon-btn subtle" title="Remove">
-                  ×
-                </button>
-              </li>
-            )}
+                  <span class="queue-grip" title="Drag to reorder">
+                    ⋮⋮
+                  </span>
+                  <button
+                    class="icon-btn"
+                    title="Move earlier"
+                    disabled={idx() === 0}
+                    onClick={[move, [selected.code, -1]]}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    class="icon-btn"
+                    title="Move later"
+                    disabled={idx() === state.selected.length - 1}
+                    onClick={[move, [selected.code, 1]]}
+                  >
+                    ↓
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    title="Quantity"
+                    value={selected.qty}
+                    onChange={[handleQuantityChange, selected.code]}
+                  />
+                  <div class="queue-code-family-wrapper">
+                    <span class="queue-name">{selected.code}</span>
+                    <span class="queue-family">{selected.family}</span>
+                  </div>
+                  <button
+                    class="icon-btn subtle"
+                    title="Remove"
+                    onClick={() => {
+                      setState(
+                        "selected",
+                        state.selected.filter((e) => e.code !== selected.code),
+                      );
+                    }}
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            }}
           </For>
         </ul>
       </Show>

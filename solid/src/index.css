@@ -379,7 +379,7 @@ select:focus-visible {
 .queue-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 2px 0;
   max-height: 240px;
   overflow-y: auto;
 }
@@ -408,8 +408,12 @@ select:focus-visible {
   opacity: 0.35;
 }
 
-.queue-list li.drop-target {
+.queue-list li.drop-target-top {
   box-shadow: 0 -2px 0 0 var(--accent);
+}
+
+.queue-list li.drop-target-bottom {
+  box-shadow: 0 2px 0 0 var(--accent);
 }
 
 .queue-grip {
