@@ -1,6 +1,6 @@
 import { Show } from "solid-js";
-import { normalizeOee } from "../services/solver-bruteforce";
 import { useMainStore } from "../Context";
+import { normalizeOee } from "../services/solvers/common";
 
 export default function () {
   const { state } = useMainStore();
@@ -21,7 +21,7 @@ export default function () {
           {state.parsed?.breaks.length} break
           {state.parsed?.breaks.length === 1 ? "" : "s"}
           {" · "}
-          OEE {Math.round(normalizeOee(state.parsed?.settings.oee) * 100)}%
+          OEE {Math.round(normalizeOee(state.parsed?.settings.oee ?? 0) * 100)}%
         </div>
       </Show>
     </section>

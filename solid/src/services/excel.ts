@@ -13,8 +13,9 @@
  * Call init(XLSX) once with the SheetJS namespace before parsing.
  */
 
-import { parseTimeToMinutes } from "./solver-bruteforce";
 import * as lib from "xlsx";
+import { parseTimeToMinutes } from "./solvers/common";
+import { minutesToHMInput } from "../utils/dates";
 
 /* -------------------------------------------------------------- helpers -- */
 
@@ -126,6 +127,7 @@ export function parseWorkbook(wb) {
       dueAt: null,
       crew: 1,
       crewFactor: "1",
+      line: "",
     },
     shifts: [], // {name, start, end} as minutes since midnight
     breaks: [],
@@ -456,6 +458,8 @@ function parseSettings(wb, result, warnings) {
         norm(s) === "start"
           ? ""
           : s;
+    } else if ("line" === k) {
+      result.settings.line = v;
     }
   }
 }
@@ -533,7 +537,132 @@ function validate(result, warnings) {
 }
 
 /** Test convenience: parse raw bytes of an .xlsx file. */
-export function parseWorkbookFromBuffer(buf) {
+export function parseWorkbookFromBuffer(buf: Uint8Array) {
   const wb = lib.read(buf, { type: "array", cellDates: true });
   return parseWorkbook(wb);
+}
+
+function buildWorkbook(state: MainStore) {
+  const X = lib;
+  const wb = X.utils.book_new();
+  const p = state.parsed;
+  const families = p.families;
+
+  // Setup Matrix — original values, session spelling
+  const setupAoA = [["From \\ To", ...families]];
+  const sourceRows = [...families, ...(p.hasStartRow ? ["__start__"] : [])];
+  for (const from of sourceRows) {
+    setupAoA.push([
+      from === "__start__" ? "Start" : from, // exported under its matrix name
+      ...families.map((to) => p.setup[`${from}>${to}`] ?? ""),
+    ]);
+  }
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(setupAoA), "Setup Matrix");
+
+  // Codes — the full catalogue
+  X.utils.book_append_sheet(
+    wb,
+    X.utils.aoa_to_sheet([
+      ["Code", "Family", "Unit time (s)", "Description"],
+      ...state.catalog.map((c) => [
+        c.code,
+        c.family,
+        Math.round(c.unitMinutes * 60),
+        c.name || "",
+      ]),
+    ]),
+    "Codes",
+  );
+
+  // Shifts & breaks (session calendar; names are regenerated on load)
+  X.utils.book_append_sheet(
+    wb,
+    X.utils.aoa_to_sheet([
+      ["Shift", "Start", "End"],
+      ...state.shifts.map((s, i) => [
+        `Shift ${i + 1}`,
+        minutesToHMInput(s.start),
+        minutesToHMInput(s.end),
+      ]),
+    ]),
+    "Shifts",
+  );
+  X.utils.book_append_sheet(
+    wb,
+    X.utils.aoa_to_sheet([
+      ["Break", "Start", "End"],
+      ...state.breaks.map((b, i) => [
+        `Break ${i + 1}`,
+        minutesToHMInput(b.start),
+        minutesToHMInput(b.end),
+      ]),
+    ]),
+    "Breaks",
+  );
+
+  // Order — the queue as it will run, so a manual plan survives a round trip
+  // Order — the queue as it will run, plus a "Produced" column the shift
+  // supervisor fills in; reloading the workbook updates the output panel
+  X.utils.book_append_sheet(
+    wb,
+    X.utils.aoa_to_sheet([
+      ["Code", "Qty", "Produced"],
+      ...state.selected.map((s) => [s.code, s.qty, s.produced || 0]),
+    ]),
+    "Order",
+  );
+
+  // Failures — one-off unplanned downtime (always present so the sheet can
+  // be filled in directly in Excel; loaded again on import)
+  X.utils.book_append_sheet(
+    wb,
+    X.utils.aoa_to_sheet([
+      ["Date", "Start", "End"],
+      ...state.failures.map((f) => [
+        f.date,
+        minutesToHMInput(f.start),
+        minutesToHMInput(f.end),
+      ]),
+    ]),
+    "Failures",
+  );
+
+  // Settings — session values
+  const settingsRows = [
+    ["OEE", state.oee],
+    ["Start date", state.startDate || todayStr()],
+    [
+      "Planning direction",
+      state.direction === "backward" ? "Backward" : "Forward",
+    ],
+  ];
+  if (state.direction === "backward") {
+    settingsRows.push([
+      "Due date",
+      state.dueDate || state.startDate || todayStr(),
+    ]);
+    if (state.dueAt) settingsRows.push(["Due time", state.dueAt]);
+  }
+  settingsRows.push([
+    "Initial family",
+    state.initialFamily === ""
+      ? "None"
+      : state.initialFamily === "__start__"
+        ? "Start"
+        : state.initialFamily,
+  ]);
+  X.utils.book_append_sheet(
+    wb,
+    X.utils.aoa_to_sheet([["Setting", "Value"], ...settingsRows]),
+    "Settings",
+  );
+
+  return wb;
+}
+
+export function getExcelBuffer(state: MainStore) {
+  return lib.write(buildWorkbook(state), {
+    bookType: "xlsx",
+    type: "buffer",
+  });
 }

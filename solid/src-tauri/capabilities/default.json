@@ -11,6 +11,7 @@
     "dialog:default",
     "fs:default",
     "fs:allow-open",
+    "fs:allow-write-file",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**/*" }]

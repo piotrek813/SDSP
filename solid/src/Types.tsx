@@ -119,6 +119,7 @@ export type ParsedWorkbook = {
     dueAt?: string | null;
     crew?: number;
     crewFactor?: string;
+    line: string;
   };
   shifts: Shift[];
   breaks: Break[];
@@ -156,7 +157,6 @@ export type MainStore = {
   parsed: ParsedWorkbook | null; // excel.parseWorkbook result
   catalog: Product[]; // all codes from the file
   selected: Product[]; // {code, family, qty, unitMinutes, name} — THE run order
-  mode: "optymalna" | "manual"; // "optymalna" = follow the solver, "manual" = user's order
   oee: number;
   startDate: string;
   startAt: string; // "" = as soon as the calendar allows
@@ -170,9 +170,10 @@ export type MainStore = {
   holidaysPath: string; // where that file lives (persisted by the Go server)
   crew: 1; // people working — affects per-piece run time
   crewFactor: "1"; // f(crew): "" or "1" = no time impact; e.g. "1/x"
-  initialFamily: ""; // "" = none, "__start__" = matrix start row, else family
-  fixedFirst: ""; // "" = free optimisation, else family name
+  initialFamily: string; // "" = none, "__start__" = matrix start row, else family
+  fixedFirst: string; // "" = free optimisation, else family name
   showIdeal: false;
   result: null; // last solve { opt, sched, idealSched, gapMin, notOptimizable }
-  optCache: null; // { key, res } — optimum only changes with setup/inputs
+  optCache: { key: string; res: any } | null; // { key, res } — optimum only changes with setup/inputs
+  mode: "optimal" | "manual";
 };

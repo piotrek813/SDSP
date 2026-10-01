@@ -19,8 +19,8 @@ function App() {
     parsed: null, // excel.parseWorkbook result
     catalog: [], // all codes from the file
     selected: [], // {code, family, qty, unitMinutes, name} — THE run order
-    mode: "optymalna", // "optymalna" = follow the solver, "manual" = user's order
     oee: 0.8,
+    mode: "optimal",
     startDate: todayStr(),
     startAt: "", // "" = as soon as the calendar allows
     direction: "forward", // "forward" from start date, "backward" from due date
@@ -44,16 +44,16 @@ function App() {
     <MainContext.Provider value={{ state, setState }}>
       <Topbar />
       <Banner />
-      <main class="layout" id="view-planner">
-        <Sidebar />
-        <section class="results">
-          <ScheduleProvider>
+      <ScheduleProvider>
+        <main class="layout" id="view-planner">
+          <Sidebar />
+          <section class="results">
             <Summary />
             <Output />
             <GanttView />
-          </ScheduleProvider>
-        </section>
-      </main>
+          </section>
+        </main>
+      </ScheduleProvider>
     </MainContext.Provider>
   );
 }

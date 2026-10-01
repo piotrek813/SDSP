@@ -20,7 +20,7 @@ export default function () {
   return (
     <section class="panel" data-views="planner,production">
       <h2>Kalendarz zmian</h2>
-      <label class="field">
+      <label class="field" data-views="planner">
         Kierunek planowania
         <select
           id="direction"
@@ -33,7 +33,7 @@ export default function () {
           <option value="backward">W tył — zakończ na termin</option>
         </select>
       </label>
-      <div class="field-row field-anchor-start">
+      <div class="field-row field-anchor-start" data-views="planner">
         <Show
           when={state.direction === "backward"}
           fallback={

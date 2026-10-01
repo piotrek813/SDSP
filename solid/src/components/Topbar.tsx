@@ -1,15 +1,16 @@
 import BrandLogo from "../assets/logo.svg";
-import { open } from "@tauri-apps/plugin-dialog";
-import { open as fsOpen } from "@tauri-apps/plugin-fs";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { open as fsOpen, writeFile } from "@tauri-apps/plugin-fs";
 import { useMainStore } from "../Context";
-import { parseWorkbookFromBuffer } from "../services/excel";
+import { getExcelBuffer, parseWorkbookFromBuffer } from "../services/excel";
 import { SetStoreFunction } from "solid-js/store";
 import { MainStore } from "../Types";
-import { normalizeOee } from "../services/solver-bruteforce";
-import { clearBanner } from "./Banner";
-import { defaultStartDate } from "../utils/dates";
+import { clearBanner, setBanner } from "./Banner";
+import { defaultStartDate, stamp } from "../utils/dates";
 import { basename } from "../utils/path";
 import { onMount } from "solid-js";
+import { normalizeOee } from "../services/solvers/common";
+import { readDemoWorkbook } from "../services/files";
 
 function applyParsed(
   setState: SetStoreFunction<MainStore>,
@@ -45,7 +46,7 @@ function applyParsed(
           parsed.settings.direction === "backward" ? "backward" : "forward",
         dueDate: parsed.settings.dueDate || null,
         dueAt: parsed.settings.dueAt || "",
-        mode: parsed.order && parsed.order.length ? "manual" : "optymalna",
+        mode: parsed.order && parsed.order.length ? "manual" : "optimal",
         selected: parsed.order
           .map((o: any) => {
             const c = state.catalog.find((k) => k.code === o.code);
@@ -66,17 +67,6 @@ function applyParsed(
   );
 
   clearBanner();
-  // renderCatalog();
-  // renderSelected();
-  // renderCalendarEditors();
-  // renderSolverOptions();
-  // syncSessionControls();
-  // renderHolidays();
-  // // Reload only makes sense for a workbook on disk (the demo is refetched)
-  // els["btn-reload"].disabled = !state.file || state.isDemo;
-  // els["crew-input"].value = state.crew;
-  // els["crew-factor-input"].value = state.crewFactor;
-  // recompute();
 }
 
 export default function () {
@@ -102,7 +92,6 @@ export default function () {
       directory: false,
       extensions: [".xlsx", ".xlsm"],
     });
-    console.log(filePath);
 
     if (filePath === null) {
       return;
@@ -117,6 +106,40 @@ export default function () {
     const parsed = parseWorkbookFromBuffer(buf);
 
     applyParsed(setState, parsed, basename(filePath));
+  }
+
+  async function loadDemoData() {
+    const buf = await readDemoWorkbook();
+
+    const parsed = parseWorkbookFromBuffer(buf);
+    applyParsed(setState, parsed, "demo-input.xlsx", true);
+  }
+
+  async function exportExcel() {
+    if (!state.parsed) {
+      setBanner("Najpierw otwórz skoroszyt — nie ma czego pobrać.", true);
+      return;
+    }
+
+    const filename = `${state.parsed.settings.line}-plan-${stamp()}.xlsx`;
+
+    const buffer = getExcelBuffer(state);
+
+    const dir = await save({
+      defaultPath: filename,
+      filters: [
+        {
+          name: "Excel",
+          extensions: ["xlsx"],
+        },
+      ],
+    });
+
+    if (!dir) {
+      return;
+    }
+
+    await writeFile(dir, buffer);
   }
 
   return (
@@ -147,8 +170,8 @@ export default function () {
           Otwórz skoroszyt…
         </button>
         <input id="file-input" type="file" accept=".xlsx,.xls,.xlsm" hidden />
-        <button id="btn-demo" class="btn" type="button">
-          Dane demonstracyjne
+        <button id="btn-demo" class="btn" type="button" onClick={loadDemoData}>
+          Otwórz szablon
         </button>
         <button
           id="btn-reload"
@@ -165,6 +188,7 @@ export default function () {
           class="btn"
           type="button"
           title="Zapisz plan jako skoroszyt (macierz przezbrojeń, kody, kolejność, ustawienia)"
+          onClick={exportExcel}
         >
           Pobierz skoroszyt
         </button>

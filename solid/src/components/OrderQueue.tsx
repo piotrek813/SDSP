@@ -1,31 +1,59 @@
-import { batch, createSignal, For, Show } from "solid-js";
+import {
+  batch,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from "solid-js";
 import { useMainStore } from "../Context";
 import { produce } from "solid-js/store";
+import { fmtDur } from "../utils/dates";
+import { useSchedule } from "../Schedule";
 
 export default function () {
   const { state, setState } = useMainStore();
+  const { schedule, optimum } = useSchedule();
   const [dragFromIndex, setDragFromIndex] = createSignal<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = createSignal<number | null>(null);
 
+  const gapMin = createMemo(() => {
+    const opt = optimum();
+
+    const gapMin =
+      opt !== null ? schedule().setupMinutes - opt.setupMinutes : null;
+
+    return gapMin ?? 0;
+  });
+
+  const isScheduleTimeDifferent = () => gapMin() > 1e-6;
+
   function move([code, dir]: [string, -1 | 1]) {
-    setState(
-      "selected",
-      produce((selected) => {
-        const idx = selected.findIndex((e) => e.code === code);
+    batch(() => {
+      setState("mode", "manual");
 
-        if (idx === -1) return;
+      setState(
+        "selected",
+        produce((selected) => {
+          const idx = selected.findIndex((e) => e.code === code);
 
-        const nextIdx = idx + dir;
+          if (idx === -1) return;
 
-        if (nextIdx < 0 || nextIdx >= selected.length) return;
+          const nextIdx = idx + dir;
 
-        [selected[idx], selected[nextIdx]] = [selected[nextIdx], selected[idx]];
-      }),
-    );
+          if (nextIdx < 0 || nextIdx >= selected.length) return;
+
+          [selected[idx], selected[nextIdx]] = [
+            selected[nextIdx],
+            selected[idx],
+          ];
+        }),
+      );
+    });
   }
 
   function handleQuantityChange(code: string, evt: any) {
-    console.log(code);
     setState(
       "selected",
       (e) => e.code === code,
@@ -41,17 +69,30 @@ export default function () {
         <span class="queue-tools">
           <span
             id="queue-pill"
-            class="mode-pill ok"
+            classList={{
+              "mode-pill": true,
+              ok: state.mode === "optimal" || !isScheduleTimeDifferent(),
+              warn: isScheduleTimeDifferent(),
+            }}
             title="Status kolejności wykonania"
           >
-            optymalna
+            <Switch fallback={"edited · matches optimum"}>
+              <Match when={state.mode === "optimal"}>optymalna</Match>
+
+              <Match when={state.mode === "optimal"}>optymalna</Match>
+
+              <Match when={isScheduleTimeDifferent()}>
+                edited · +{fmtDur(gapMin())}
+              </Match>
+            </Switch>
           </span>
           <button
             id="btn-reoptimise"
             class="btn tiny"
             type="button"
-            disabled
             title="Ponownie uruchom optymalizację i zastąp kolejność najlepszą sekwencją"
+            disabled={state.mode === "optimal" || !isScheduleTimeDifferent()}
+            onClick={() => setState("mode", "optimal")}
           >
             Optymalizuj
           </button>
@@ -131,6 +172,8 @@ export default function () {
                       );
                       setDragFromIndex(null);
                       setDragOverIndex(null);
+
+                      setState("mode", "manual");
                     });
                   }}
                   on:dragend={() => {

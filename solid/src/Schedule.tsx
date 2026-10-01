@@ -5,14 +5,21 @@ import {
   ParentComponent,
   useContext,
 } from "solid-js";
-import { ScheduleResult } from "./Types";
-import { buildScheduleFromCodeOrder } from "./services/solver-bruteforce";
+import { ScheduleResult, SolveResult } from "./Types";
 import { useMainStore } from "./Context";
-import { buildCtx } from "./services/ctx";
+import {
+  buildCtx,
+  getOptimum,
+  queueFromSequence,
+  sameOrder,
+} from "./services/ctx";
+import { buildScheduleFromCodeOrder } from "./services/solvers/solver-bruteforce";
+import { setBanner } from "./components/Banner";
 
 type ScheduleContext = {
   schedule: Accessor<ScheduleResult>;
   idealSchedule: Accessor<ScheduleResult | null>;
+  optimum: Accessor<SolveResult | null>;
 };
 
 export const ScheduleContext = createContext<ScheduleContext>();
@@ -26,10 +33,35 @@ export const useSchedule = () => {
 };
 
 export const ScheduleProvider: ParentComponent = (props) => {
-  const { state } = useMainStore();
+  const { state, setState } = useMainStore();
 
   const ctx = createMemo(() => {
     return buildCtx(state);
+  });
+
+  const optimum = createMemo(() => {
+    try {
+      const res = getOptimum(state, ctx());
+
+      if (res === null) return null;
+
+      const [opt, key] = res;
+
+      // Follow the optimiser: in optimal mode the queue mirrors the best sequence.
+      // Manual mode never touches the user's order.
+      if (state.mode === "optimal" && opt) {
+        const wanted = queueFromSequence(state.selected, opt.sequence);
+        if (!sameOrder(state.selected, wanted)) {
+          setState("selected", wanted);
+          setState("optCache", { key, res: opt });
+        }
+      }
+
+      return opt;
+    } catch (err) {
+      setBanner(`Calendar problem: ${err.message}`, true);
+      return null;
+    }
   });
 
   const schedule = createMemo(() => {
@@ -46,8 +78,9 @@ export const ScheduleProvider: ParentComponent = (props) => {
   return (
     <ScheduleContext.Provider
       value={{
-        schedule: schedule,
-        idealSchedule: idealSchedule,
+        schedule,
+        idealSchedule,
+        optimum,
       }}
     >
       {props.children}

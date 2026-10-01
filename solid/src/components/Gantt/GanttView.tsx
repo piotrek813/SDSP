@@ -1,12 +1,12 @@
 import { createMemo, Show } from "solid-js";
 import { useMainStore } from "../../Context";
-import { expandWorkIntervals } from "../../services/solver-bruteforce";
 import { MainStore } from "../../Types";
 import { fmtDur, fmtHM, toLocalDateStr } from "../../utils/dates";
 import GanttChart from "../Gantt/GanttChart";
 import Legend from "./Legend";
 import { familyColors } from "../../utils/colors";
 import { useSchedule } from "../../Schedule";
+import { expandWorkIntervals } from "../../services/solvers/common";
 
 function expandHolidayIntervals(state: MainStore, sched: Schedule) {
   if (!sched.start || !sched.end) return [];

@@ -25,7 +25,7 @@ export default function () {
   });
 
   return (
-    <section class="panel" data-views="planner,production">
+    <section class="panel" data-views="planner">
       <h2>Święta</h2>
       <label class="field">
         Plik świąt (dysk lokalny lub sieciowy)
