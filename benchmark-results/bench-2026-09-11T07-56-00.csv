@@ -1,4 +1,0 @@
-solver,n,instance,seed,setupMinutes,bestKnown,gapPct,timeMs,medianMs,evaluated,optimal,exact,note
-brute-force,11,0,20261101,,32,,,,,false,true,gave up: Brute force needs 11! permutations (11 families); the limit is 10.
-held-karp,11,0,20261101,32,32,0.000,8.130,8.130,,true,true,
-greedy+2opt,11,0,20261101,32,32,0.000,2.169,2.169,661,true,false,

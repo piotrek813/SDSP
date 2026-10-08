@@ -439,3 +439,4 @@ mod tests {
         assert_eq!(normalize_date("2026/12/25").unwrap(), "2026-12-25");
     }
 }
+

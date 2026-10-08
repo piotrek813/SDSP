@@ -1,18 +1,29 @@
 {
-  "name": "adamiecki",
-  "private": true,
+  "name": "solid",
   "version": "0.1.0",
+  "description": "",
   "type": "module",
   "scripts": {
-    "tauri": "tauri",
-    "test": "node --test test/solver.test.mjs test/excel.test.mjs test/solver-heldkarp.test.mjs",
-    "benchmark": "node tools/benchmark.mjs",
-    "sample": "node tools/make-sample.mjs"
+    "start": "vite",
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview",
+    "tauri": "tauri"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "~2.7.3",
+    "@tauri-apps/plugin-fs": "~2.5.2",
+    "@tauri-apps/plugin-opener": "^2",
+    "html-to-image": "^1.11.13",
+    "solid-js": "^1.9.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
-  },
-  "dependencies": {
-    "@tauri-apps/plugin-fs": "~2.5.2"
+    "@tauri-apps/cli": "^2",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16",
+    "vite-plugin-solid": "^2.11.12"
   }
 }
