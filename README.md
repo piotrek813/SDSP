@@ -1,11 +1,11 @@
 <h1>
   <img
-    src="./favicon.svg"
-    alt="Cadence logo"
+    src="./icon.ico"
+    alt="Logo"
     width="40"
     style="vertical-align: middle;"
   />
-  <span style="vertical-align: middle;">Cadence — Man plans, God laughs</span>
+  <span style="vertical-align: middle;">Adamiecki — Man plans, God laughs</span>
 </h1>
 
 Always behind a schedule? That's life as Frank Sintara would put it.
