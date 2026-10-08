@@ -21,7 +21,7 @@ export default function () {
           <span class="metric-label">Zakończenie</span>
           <span id="m-finish" class="metric-value">
             {schedule().rows.length !== 0
-              ? schedule().end.toLocaleString(undefined, {
+              ? schedule().end.toLocaleString("pl-PL", {
                   weekday: "short",
                   day: "numeric",
                   month: "short",

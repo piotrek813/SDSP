@@ -1,16 +1,18 @@
 import BrandLogo from "../assets/logo.svg";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { open as fsOpen, writeFile } from "@tauri-apps/plugin-fs";
+import * as path from "@tauri-apps/api/path";
 import { useMainStore } from "../Context";
 import { getExcelBuffer, parseWorkbookFromBuffer } from "../services/excel";
 import { SetStoreFunction } from "solid-js/store";
-import { MainStore } from "../Types";
+import { MainStore, ParsedWorkbook, Product } from "../Types";
 import { clearBanner, setBanner } from "./Banner";
 import { defaultStartDate, stamp } from "../utils/dates";
 import { basename } from "../utils/path";
-import { onMount } from "solid-js";
 import { normalizeOee } from "../services/solvers/common";
 import { readDemoWorkbook } from "../services/files";
+import { onMount } from "solid-js";
+import { toBlob } from "html-to-image";
 
 function applyParsed(
   setState: SetStoreFunction<MainStore>,
@@ -18,6 +20,10 @@ function applyParsed(
   fileName: string,
   isDemo: boolean = false,
 ) {
+  const catalog: Product[] = parsed.codes.map((c: any) => ({
+    ...c,
+    id: c.code,
+  }));
   setState(
     (state: MainStore) =>
       ({
@@ -25,7 +31,7 @@ function applyParsed(
         fileName: fileName,
         fileHandle: isDemo ? null : state.fileHandle,
         isDemo: isDemo,
-        catalog: parsed.codes.map((c: any) => ({ ...c, id: c.code })),
+        catalog: catalog,
         optCache: null,
         oee: normalizeOee(parsed.settings.oee ?? 0.8),
         startDate: defaultStartDate(parsed.settings.startDate),
@@ -49,7 +55,7 @@ function applyParsed(
         mode: parsed.order && parsed.order.length ? "manual" : "optimal",
         selected: parsed.order
           .map((o: any) => {
-            const c = state.catalog.find((k) => k.code === o.code);
+            const c = catalog.find((k) => k.code === o.code);
             return c
               ? {
                   code: c.code,
@@ -83,7 +89,6 @@ export default function () {
     const parsed = parseWorkbookFromBuffer(buf);
 
     applyParsed(setState, parsed, basename(filePath));
-    console.log(state);
   });
 
   async function openWorkbook() {
@@ -115,13 +120,18 @@ export default function () {
     applyParsed(setState, parsed, "demo-input.xlsx", true);
   }
 
+  function getFileName(settings: ParsedWorkbook["settings"]) {
+    const filename = `${settings.line}-plan-${stamp()}.xlsx`;
+    return filename;
+  }
+
   async function exportExcel() {
     if (!state.parsed) {
       setBanner("Najpierw otwórz skoroszyt — nie ma czego pobrać.", true);
       return;
     }
 
-    const filename = `${state.parsed.settings.line}-plan-${stamp()}.xlsx`;
+    const filename = getFileName(state.parsed.settings);
 
     const buffer = getExcelBuffer(state);
 
@@ -197,16 +207,47 @@ export default function () {
           class="btn"
           type="button"
           title="Zapisz wykres jako SVG"
+          onClick={async () => {
+            if (!state.parsed) return;
+
+            const defaultPath = await path.join(
+              await path.downloadDir(),
+              getFileName(state.parsed.settings),
+            );
+
+            const dir = await save({
+              defaultPath,
+              filters: [
+                {
+                  name: "SVG",
+                  extensions: ["svg"],
+                },
+              ],
+            });
+
+            if (!dir) {
+              return;
+            }
+
+            const el = document.getElementById("gantt-card");
+
+            if (el === null) {
+              return;
+            }
+
+            const blob = await toBlob(el);
+            const arrayBuffer = await blob?.arrayBuffer();
+
+            if (!arrayBuffer) {
+              return;
+            }
+
+            const buffer = new Uint8Array(arrayBuffer);
+
+            await writeFile(dir, buffer);
+          }}
         >
           SVG
-        </button>
-        <button
-          id="btn-png"
-          class="btn"
-          type="button"
-          title="Zapisz wykres jako PNG"
-        >
-          PNG
         </button>
       </div>
     </header>

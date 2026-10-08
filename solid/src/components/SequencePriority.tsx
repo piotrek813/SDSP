@@ -12,6 +12,7 @@ export default function () {
         <select
           id="initial-family"
           onChange={(evt) => setState("initialFamily", evt.currentTarget.value)}
+          value={state.fixedFirst}
         >
           <option value="">Brak przezbrojenia (maszyna pracuje)</option>
           <Index each={state.parsed?.families ?? []}>
@@ -24,6 +25,7 @@ export default function () {
         <select
           id="fixed-first"
           onChange={(evt) => setState("fixedFirst", evt.currentTarget.value)}
+          value={state.fixedFirst}
         >
           <option value="">Optymalizacja swobodna</option>
           <Index each={state.parsed?.families ?? []}>

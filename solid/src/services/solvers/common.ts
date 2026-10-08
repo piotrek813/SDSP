@@ -21,7 +21,7 @@ export function setupBetween(ctx: Ctx, from: string | null, to: string | null) {
 }
 
 /** Ideal production minutes for the whole plan (OEE-independent). */
-export function idealRunMinutes(codes: Product[]) {
+export function idealRunMinutes(codes: Pick<Product, "qty" | "unitMinutes">[]) {
   return (codes || []).reduce((s, c) => s + (c.qty * c.unitMinutes || 0), 0);
 }
 

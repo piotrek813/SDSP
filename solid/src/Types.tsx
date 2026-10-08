@@ -168,8 +168,8 @@ export type MainStore = {
   failures: Failure[]; // one-off production failures {date, start, end}
   holidays: Holiday[]; // full non-working days [{date, name}] from a file
   holidaysPath: string; // where that file lives (persisted by the Go server)
-  crew: 1; // people working — affects per-piece run time
-  crewFactor: "1"; // f(crew): "" or "1" = no time impact; e.g. "1/x"
+  crew: number; // people working — affects per-piece run time
+  crewFactor: string; // f(crew): "" or "1" = no time impact; e.g. "1/x"
   initialFamily: string; // "" = none, "__start__" = matrix start row, else family
   fixedFirst: string; // "" = free optimisation, else family name
   showIdeal: false;

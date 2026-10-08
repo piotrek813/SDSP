@@ -13,7 +13,7 @@ export default function () {
 
   function setHolidays(holidays: RustHolidays) {
     if (holidays.error) {
-      setBanner(holidays.error, true);
+      setBanner("Nie można wczytać pliku z dniami wolnymi", true);
     }
 
     setState("holidays", holidays.holidays);

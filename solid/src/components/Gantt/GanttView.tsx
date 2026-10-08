@@ -215,7 +215,7 @@ export default function () {
   // }
 
   return (
-    <div class="gantt-card">
+    <div id="gantt-card" class="gantt-card">
       <div id="gantt-host" class="gantt-host"></div>
       <Show
         when={state.selected.length !== 0}

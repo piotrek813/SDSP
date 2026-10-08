@@ -42,9 +42,9 @@ function App() {
 
   return (
     <MainContext.Provider value={{ state, setState }}>
-      <Topbar />
-      <Banner />
       <ScheduleProvider>
+        <Topbar />
+        <Banner />
         <main class="layout" id="view-planner">
           <Sidebar />
           <section class="results">

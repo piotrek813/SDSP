@@ -49,6 +49,8 @@ export default function () {
                     title="Pieces created for this order"
                     value={selected.produced}
                     onChange={(evt) => {
+                      console.log(evt);
+
                       if (evt.currentTarget === null) return;
 
                       const value =
